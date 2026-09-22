@@ -9,6 +9,8 @@ RUN apt-get update \
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
+COPY --chown=app:app app ./app
+COPY --chown=app:app tests ./tests
 RUN mkdir -p /jobs && chown -R app:app /app /jobs
 USER app
 

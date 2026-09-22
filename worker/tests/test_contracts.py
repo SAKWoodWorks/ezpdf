@@ -27,3 +27,57 @@ def test_payload_rejects_unknown_operation():
                 "options": {},
             }
         )
+
+
+@pytest.mark.parametrize("field", ["id", "ownerId"])
+def test_payload_rejects_non_string_identifiers(field):
+    payload = {
+        "id": "j1",
+        "ownerId": "u1",
+        "operation": "merge_pdf",
+        "inputNames": ["a.pdf"],
+        "options": {},
+    }
+    payload[field] = 1
+
+    with pytest.raises(ValueError, match=f"{field} must be a non-empty string"):
+        JobPayload.from_dict(payload)
+
+
+def test_payload_rejects_string_input_names():
+    with pytest.raises(ValueError, match="inputNames must be a list of strings"):
+        JobPayload.from_dict(
+            {
+                "id": "j1",
+                "ownerId": "u1",
+                "operation": "merge_pdf",
+                "inputNames": "a.pdf",
+                "options": {},
+            }
+        )
+
+
+def test_payload_rejects_non_string_input_name():
+    with pytest.raises(ValueError, match="inputNames must be a list of strings"):
+        JobPayload.from_dict(
+            {
+                "id": "j1",
+                "ownerId": "u1",
+                "operation": "merge_pdf",
+                "inputNames": ["a.pdf", 1],
+                "options": {},
+            }
+        )
+
+
+def test_payload_rejects_non_object_options():
+    with pytest.raises(ValueError, match="options must be an object"):
+        JobPayload.from_dict(
+            {
+                "id": "j1",
+                "ownerId": "u1",
+                "operation": "merge_pdf",
+                "inputNames": ["a.pdf"],
+                "options": [],
+            }
+        )

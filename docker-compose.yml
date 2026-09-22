@@ -24,7 +24,9 @@ services:
     image: redis:7-alpine
   pocketbase:
     image: spectado/pocketbase:0.26.7
-    volumes: [pocketbase_data:/pb_data]
+    volumes:
+      - pocketbase_data:/pb_data
+      - ./pocketbase/pb_migrations:/pb_migrations:ro
 volumes:
   pocketbase_data:
 networks:
