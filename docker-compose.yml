@@ -3,6 +3,8 @@ services:
     build: ./web
     environment:
       POCKETBASE_URL: http://pocketbase:8090
+      POCKETBASE_SUPERUSER_EMAIL: ${POCKETBASE_SUPERUSER_EMAIL:?Set a PocketBase superuser email}
+      POCKETBASE_SUPERUSER_PASSWORD: ${POCKETBASE_SUPERUSER_PASSWORD:?Set a PocketBase superuser password}
       REDIS_URL: redis://redis:6379/0
       JOBS_DIR: /jobs
       MAX_UPLOAD_BYTES: "104857600"
@@ -13,6 +15,8 @@ services:
     build: ./worker
     environment:
       POCKETBASE_URL: http://pocketbase:8090
+      POCKETBASE_SUPERUSER_EMAIL: ${POCKETBASE_SUPERUSER_EMAIL:?Set a PocketBase superuser email}
+      POCKETBASE_SUPERUSER_PASSWORD: ${POCKETBASE_SUPERUSER_PASSWORD:?Set a PocketBase superuser password}
       REDIS_URL: redis://redis:6379/0
       JOBS_DIR: /jobs
       JOB_TTL_SECONDS: "3600"

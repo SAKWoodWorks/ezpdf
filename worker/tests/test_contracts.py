@@ -12,7 +12,8 @@ def test_worker_bootstrap_module_imports():
 def test_payload_accepts_known_operation():
     job = JobPayload.from_dict(
         {
-            "id": "j1",
+            "recordId": "record000000001",
+            "jobKey": "550e8400-e29b-41d4-a716-446655440000",
             "ownerId": "u1",
             "operation": "merge_pdf",
             "inputNames": ["a.pdf"],
@@ -26,7 +27,8 @@ def test_payload_rejects_unknown_operation():
     with pytest.raises(ValueError, match="Unsupported operation"):
         JobPayload.from_dict(
             {
-                "id": "j1",
+                "recordId": "record000000001",
+                "jobKey": "550e8400-e29b-41d4-a716-446655440000",
                 "ownerId": "u1",
                 "operation": "edit_pdf",
                 "inputNames": [],
@@ -35,10 +37,11 @@ def test_payload_rejects_unknown_operation():
         )
 
 
-@pytest.mark.parametrize("field", ["id", "ownerId"])
+@pytest.mark.parametrize("field", ["recordId", "ownerId", "jobKey"])
 def test_payload_rejects_non_string_identifiers(field):
     payload = {
-        "id": "j1",
+        "recordId": "record000000001",
+        "jobKey": "550e8400-e29b-41d4-a716-446655440000",
         "ownerId": "u1",
         "operation": "merge_pdf",
         "inputNames": ["a.pdf"],
@@ -46,7 +49,7 @@ def test_payload_rejects_non_string_identifiers(field):
     }
     payload[field] = 1
 
-    with pytest.raises(ValueError, match=f"{field} must be a non-empty string"):
+    with pytest.raises(ValueError, match=f"{field} must be"):
         JobPayload.from_dict(payload)
 
 
@@ -54,7 +57,8 @@ def test_payload_rejects_string_input_names():
     with pytest.raises(ValueError, match="inputNames must be a list of strings"):
         JobPayload.from_dict(
             {
-                "id": "j1",
+                "recordId": "record000000001",
+                "jobKey": "550e8400-e29b-41d4-a716-446655440000",
                 "ownerId": "u1",
                 "operation": "merge_pdf",
                 "inputNames": "a.pdf",
@@ -67,7 +71,8 @@ def test_payload_rejects_non_string_input_name():
     with pytest.raises(ValueError, match="inputNames must be a list of strings"):
         JobPayload.from_dict(
             {
-                "id": "j1",
+                "recordId": "record000000001",
+                "jobKey": "550e8400-e29b-41d4-a716-446655440000",
                 "ownerId": "u1",
                 "operation": "merge_pdf",
                 "inputNames": ["a.pdf", 1],
@@ -80,7 +85,8 @@ def test_payload_rejects_non_object_options():
     with pytest.raises(ValueError, match="options must be an object"):
         JobPayload.from_dict(
             {
-                "id": "j1",
+                "recordId": "record000000001",
+                "jobKey": "550e8400-e29b-41d4-a716-446655440000",
                 "ownerId": "u1",
                 "operation": "merge_pdf",
                 "inputNames": ["a.pdf"],

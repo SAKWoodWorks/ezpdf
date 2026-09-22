@@ -9,6 +9,14 @@ migrate((app) => {
     deleteRule: "owner = @request.auth.id",
     fields: [
       {
+        name: "jobKey",
+        type: "text",
+        required: true,
+        min: 36,
+        max: 36,
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      },
+      {
         name: "owner",
         type: "relation",
         required: true,
@@ -44,6 +52,7 @@ migrate((app) => {
       { name: "expiresAt", type: "date", required: true },
       { name: "downloadedAt", type: "date" },
     ],
+    indexes: ["CREATE UNIQUE INDEX idx_jobs_job_key ON jobs (jobKey)"],
   });
 
   app.save(collection);

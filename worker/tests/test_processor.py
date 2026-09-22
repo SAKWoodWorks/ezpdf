@@ -60,27 +60,29 @@ def test_rejects_a_png_with_a_jpeg_suffix(tmp_path: Path):
 def test_job_directory_is_uuid_scoped(tmp_path: Path):
     job = JobPayload.from_dict(
         {
-            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "recordId": "record000000001",
+            "jobKey": "550e8400-e29b-41d4-a716-446655440000",
             "ownerId": "u",
             "operation": "merge_pdf",
             "inputNames": ["a.pdf"],
             "options": {},
         }
     )
-    assert (tmp_path / job.id).name == job.id
+    assert (tmp_path / job.job_key).name == job.job_key
 
 
 def test_process_job_returns_a_validation_error_for_numbered_input(tmp_path: Path):
     job = JobPayload.from_dict(
         {
-            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "recordId": "record000000001",
+            "jobKey": "550e8400-e29b-41d4-a716-446655440000",
             "ownerId": "u",
             "operation": "merge_pdf",
             "inputNames": ["untrusted-name.pdf"],
             "options": {},
         }
     )
-    input_dir = tmp_path / job.id / "input"
+    input_dir = tmp_path / job.job_key / "input"
     input_dir.mkdir(parents=True)
     (input_dir / "0001").write_bytes(b"not a PDF")
 
@@ -95,14 +97,15 @@ def test_process_job_maps_a_pillow_decompression_bomb_to_a_client_error(
 ):
     job = JobPayload.from_dict(
         {
-            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "recordId": "record000000001",
+            "jobKey": "550e8400-e29b-41d4-a716-446655440000",
             "ownerId": "u",
             "operation": "image_to_pdf",
             "inputNames": ["untrusted-name.png"],
             "options": {},
         }
     )
-    input_dir = tmp_path / job.id / "input"
+    input_dir = tmp_path / job.job_key / "input"
     input_dir.mkdir(parents=True)
     Image.new("RGB", (4, 4), "green").save(input_dir / "0001", "PNG")
     monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1)
@@ -116,14 +119,15 @@ def test_process_job_maps_a_pillow_decompression_bomb_to_a_client_error(
 def test_process_job_rejects_an_invalid_page_range_before_running_tools(tmp_path: Path):
     job = JobPayload.from_dict(
         {
-            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "recordId": "record000000001",
+            "jobKey": "550e8400-e29b-41d4-a716-446655440000",
             "ownerId": "u",
             "operation": "split_pdf",
             "inputNames": ["untrusted-name.pdf"],
             "options": {"pageRange": "4-2"},
         }
     )
-    input_dir = tmp_path / job.id / "input"
+    input_dir = tmp_path / job.job_key / "input"
     input_dir.mkdir(parents=True)
     (input_dir / "0001").write_bytes(b"%PDF-1.7")
 

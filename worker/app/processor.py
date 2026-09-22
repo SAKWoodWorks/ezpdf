@@ -184,7 +184,7 @@ def process_compress(input_pdf: Path, output: Path, preset: str) -> None:
 def process_job(job: JobPayload, jobs_dir: Path) -> ProcessingResult:
     """Process server-numbered input files within exactly one UUID job directory."""
     try:
-        job_dir = _job_directory(jobs_dir, job.id)
+        job_dir = _job_directory(jobs_dir, job.job_key)
         inputs = _numbered_input_files(job_dir, len(job.input_names))
         if not inputs:
             return ProcessingResult(error_code="processing_failed")

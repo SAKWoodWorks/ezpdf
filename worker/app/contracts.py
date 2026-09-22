@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
+import re
 from typing import Mapping
+from uuid import UUID
 
 
 class Operation(str, Enum):
@@ -13,7 +15,8 @@ class Operation(str, Enum):
 
 @dataclass(frozen=True)
 class JobPayload:
-    id: str
+    record_id: str
+    job_key: str
     owner_id: str
     operation: Operation
     input_names: list[str]
@@ -21,14 +24,17 @@ class JobPayload:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, object]) -> "JobPayload":
-        required_keys = ("id", "ownerId", "operation", "inputNames", "options")
+        required_keys = ("recordId", "jobKey", "ownerId", "operation", "inputNames", "options")
         missing_keys = [key for key in required_keys if key not in payload]
         if missing_keys:
             raise ValueError(f"Missing required keys: {', '.join(missing_keys)}")
 
-        id_value = payload["id"]
-        if not isinstance(id_value, str) or not id_value:
-            raise ValueError("id must be a non-empty string")
+        record_id = payload["recordId"]
+        if not isinstance(record_id, str) or not re.fullmatch(r"[a-zA-Z0-9]{15}", record_id):
+            raise ValueError("recordId must be a PocketBase record ID")
+        job_key = payload["jobKey"]
+        if not isinstance(job_key, str) or str(UUID(job_key)) != job_key:
+            raise ValueError("jobKey must be a canonical UUID")
 
         owner_id = payload["ownerId"]
         if not isinstance(owner_id, str) or not owner_id:
@@ -50,7 +56,8 @@ class JobPayload:
             raise ValueError(f"Unsupported operation: {payload['operation']}") from error
 
         return cls(
-            id=id_value,
+            record_id=record_id,
+            job_key=job_key,
             owner_id=owner_id,
             operation=operation,
             input_names=input_names,
