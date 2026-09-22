@@ -10,5 +10,6 @@ runtime/jobs/*
 node_modules/
 web/node_modules/
 web/.next/
+*.tsbuildinfo
 __pycache__/
 .pytest_cache/
