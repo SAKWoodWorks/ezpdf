@@ -98,6 +98,7 @@ def test_unexpected_processor_failure_does_not_expose_details(tmp_path):
 
 @pytest.mark.parametrize("changes", [{"owner": "other-user"}, {"jobKey": "other-key"},
                                      {"status": "ready"}, {"status": "downloaded"},
+                                     {"status": "processing"},
                                      {"operation": "merge_pdf"}])
 def test_mismatched_or_duplicate_message_does_not_process(tmp_path, changes):
     api = PocketBaseAPI(**changes)
@@ -199,3 +200,121 @@ def test_consumer_retries_final_status_write_without_reprocessing(tmp_path):
         run_worker(Queue(), client, tmp_path, 3600, stop)
     assert api.states == ["processing", "failed"]
     assert api.record["errorCode"] == "processing_failed"
+
+
+class BoundedStop:
+    def __init__(self):
+        self.stopped = False
+        self.waits = 0
+
+    def is_set(self):
+        return self.stopped
+
+    def wait(self, _seconds):
+        self.waits += 1
+        assert self.waits <= 5, "retry loop blocked queue progress"
+        return self.stopped
+
+
+class Messages:
+    def __init__(self, stop, *messages):
+        self.stop = stop
+        self.messages = list(messages)
+
+    def brpop(self, name, timeout):
+        assert name == "pdf-jobs"
+        if self.messages:
+            return (b"pdf-jobs", json.dumps(self.messages.pop(0)).encode())
+        self.stop.stopped = True
+        return None
+
+
+def test_ambiguous_processing_patch_reconciles_claim_and_finishes(tmp_path):
+    api = PocketBaseAPI()
+    folder = tmp_path / KEY
+    folder.mkdir()
+    timed_out = []
+
+    def request(req):
+        response = api.request(req)
+        if req.method == "PATCH" and json.loads(req.content)["status"] == "processing" and not timed_out:
+            timed_out.append(True)
+            raise httpx.ReadTimeout("response lost after commit", request=req)
+        return response
+
+    stop = BoundedStop()
+    with PocketBaseClient("http://pocketbase", "worker@example.test", "test-password",
+                          transport=httpx.MockTransport(request)) as client:
+        run_worker(Messages(stop, payload()), client, tmp_path, 3600, stop)
+        assert api.states == ["processing", "failed"]
+        assert api.record["errorCode"] == "processing_failed"
+        # A reconciled claim is terminal and eligible for normal TTL cleanup.
+        api.record["expiresAt"] = "2000-01-01 00:00:00.000Z"
+        from app.cleanup import cleanup_jobs
+        cleanup_jobs(tmp_path, client, 3600)
+    assert api.record["status"] == "expired"
+    assert not folder.exists()
+
+
+@pytest.mark.parametrize("deletion_initially_locked", [False, True])
+def test_deleted_record_during_result_write_cleans_folder_and_continues_queue(
+    tmp_path, monkeypatch, deletion_initially_locked
+):
+    second_id = "record000000002"
+    second_key = "550e8400-e29b-41d4-a716-446655440001"
+    downloaded_id = "record000000003"
+    downloaded_key = "550e8400-e29b-41d4-a716-446655440002"
+    first = PocketBaseAPI()
+    records = {
+        RECORD_ID: first.record,
+        second_id: PocketBaseAPI(id=second_id, jobKey=second_key).record,
+        downloaded_id: PocketBaseAPI(id=downloaded_id, jobKey=downloaded_key, status="ready").record,
+    }
+    for key in (KEY, second_key, downloaded_key):
+        (tmp_path / key).mkdir()
+    (tmp_path / "untracked").mkdir()
+    first_final_attempts = []
+    if deletion_initially_locked:
+        from app.cleanup import remove_job_directory
+        deletion_attempts = []
+        def remove_after_unlock(root, key):
+            if key == KEY and not deletion_attempts:
+                deletion_attempts.append(True)
+                raise PermissionError("folder temporarily locked")
+            return remove_job_directory(root, key)
+        monkeypatch.setattr("app.worker.remove_job_directory", remove_after_unlock)
+
+    def request(req):
+        if req.url.path.endswith("auth-with-password"):
+            return first.request(req)
+        assert req.headers["Authorization"] == "secret-token"
+        if req.url.path.endswith("/records"):
+            items = list(records.values())
+            if req.url.params.get("filter"):
+                items = [r for r in items if r["status"] == "processing"]
+            return httpx.Response(200, json={"totalPages": 1, "items": items})
+        record_id = req.url.path.rsplit("/", 1)[-1]
+        if req.method == "PATCH":
+            changes = json.loads(req.content)
+            if record_id == RECORD_ID and changes["status"] == "failed":
+                first_final_attempts.append(True)
+                records.pop(RECORD_ID, None)
+                records[downloaded_id]["status"] = "downloaded"
+                return httpx.Response(404, json={"message": "record deleted"})
+            records[record_id].update(changes)
+        if record_id not in records:
+            return httpx.Response(404, json={"message": "record deleted"})
+        return httpx.Response(200, json=records[record_id])
+
+    stop = BoundedStop()
+    with PocketBaseClient("http://pocketbase", "worker@example.test", "test-password",
+                          transport=httpx.MockTransport(request)) as client:
+        run_worker(Messages(stop, payload(), payload(recordId=second_id, jobKey=second_key)),
+                   client, tmp_path, 3600, stop)
+    assert len(first_final_attempts) <= 2
+    assert records[second_id]["status"] == "failed"
+    assert records[downloaded_id]["status"] == "expired"
+    assert not (tmp_path / KEY).exists()
+    assert not (tmp_path / downloaded_key).exists()
+    assert (tmp_path / second_key).exists()
+    assert (tmp_path / "untracked").exists()

@@ -10,7 +10,10 @@ from threading import Event
 import httpx
 from redis import Redis, RedisError
 
-from app.cleanup import cleanup_jobs, expire_job, job_is_expired, recover_processing_jobs
+from app.cleanup import (
+    cleanup_jobs, expire_job, job_is_expired, recover_processing_jobs,
+    remove_job_directory,
+)
 from app.contracts import JobPayload
 from app.pocketbase_client import PocketBaseClient
 from app.processor import ProcessingResult, process_job
@@ -24,13 +27,23 @@ ERROR_CODES = {"processing_failed", "input_too_large", "unsupported_type", "mime
 class PendingResultWrite(Exception):
     """Retain the completed result while PocketBase is temporarily unavailable."""
 
-    def __init__(self, record_id, changes):
+    def __init__(self, record_id, job_key, changes):
         super().__init__("Result metadata update is pending")
         self.record_id = record_id
+        self.job_key = job_key
         self.changes = changes
 
 
-def handle_message(message, metadata, jobs_dir, *, processor=process_job, ttl_seconds=3600):
+class PendingClaimWrite(Exception):
+    """The claim request may have committed, but processing has not started."""
+
+    def __init__(self, job):
+        super().__init__("Processing claim needs reconciliation")
+        self.job = job
+
+
+def handle_message(message, metadata, jobs_dir, *, processor=process_job,
+                   ttl_seconds=3600, pending_claim=None):
     try:
         data = json.loads(message)
         if not isinstance(data, dict):
@@ -46,7 +59,8 @@ def handle_message(message, metadata, jobs_dir, *, processor=process_job, ttl_se
         if error.response.status_code == 404:
             return False
         raise
-    if (record.get("status") != "queued" or record.get("owner") != job.owner_id
+    resuming_claim = pending_claim == job and record.get("status") == "processing"
+    if ((record.get("status") != "queued" and not resuming_claim) or record.get("owner") != job.owner_id
             or record.get("jobKey") != job.job_key or record.get("operation") != job.operation.value
             or record.get("inputNames") != job.input_names):
         logger.warning("Discarded duplicate or mismatched queue message")
@@ -54,7 +68,11 @@ def handle_message(message, metadata, jobs_dir, *, processor=process_job, ttl_se
     if job_is_expired(record, ttl_seconds):
         expire_job(jobs_dir, metadata, record)
         return False
-    metadata.update_job(job.record_id, status="processing", errorCode="", outputName="")
+    if not resuming_claim:
+        try:
+            metadata.update_job(job.record_id, status="processing", errorCode="", outputName="")
+        except httpx.HTTPError as error:
+            raise PendingClaimWrite(job) from error
     try:
         result = processor(job, jobs_dir)
     except Exception:
@@ -69,7 +87,7 @@ def handle_message(message, metadata, jobs_dir, *, processor=process_job, ttl_se
     try:
         metadata.update_job(job.record_id, **changes)
     except httpx.HTTPError as error:
-        raise PendingResultWrite(job.record_id, changes) from error
+        raise PendingResultWrite(job.record_id, job.job_key, changes) from error
     return True
 
 
@@ -77,20 +95,42 @@ def run_worker(queue, metadata, jobs_dir, ttl_seconds, stop):
     recover_processing_jobs(jobs_dir, metadata)
     pending_message = None
     pending_result = None
+    pending_claim = None
+    orphaned_job_keys = set()
     while not stop.is_set():
         try:
             if pending_result is not None:
-                metadata.update_job(pending_result.record_id, **pending_result.changes)
+                try:
+                    metadata.update_job(pending_result.record_id, **pending_result.changes)
+                except httpx.HTTPStatusError as error:
+                    if error.response.status_code != 404:
+                        raise
+                    # This key was matched to PocketBase before the job ran.
+                    # A deleted record cannot accept any later result write.
+                    orphaned_job_keys.add(pending_result.job_key)
                 pending_result = None
                 pending_message = None
+                pending_claim = None
+            for job_key in tuple(orphaned_job_keys):
+                try:
+                    remove_job_directory(jobs_dir, job_key)
+                    orphaned_job_keys.remove(job_key)
+                except (OSError, ValueError):
+                    logger.warning("Deleted record folder cleanup deferred")
             cleanup_jobs(jobs_dir, metadata, ttl_seconds)
             if pending_message is None:
                 item = queue.brpop(QUEUE_NAME, timeout=5)
                 if item is None:
                     continue
                 pending_message = item[1]
-            handle_message(pending_message, metadata, jobs_dir, ttl_seconds=ttl_seconds)
+            handle_message(pending_message, metadata, jobs_dir, ttl_seconds=ttl_seconds,
+                           pending_claim=pending_claim)
             pending_message = None
+            pending_claim = None
+        except PendingClaimWrite as error:
+            pending_claim = error.job
+            logger.warning("Processing claim response unavailable; reconciling")
+            stop.wait(5)
         except PendingResultWrite as error:
             pending_result = error
             logger.warning("Result metadata update deferred; retrying")
