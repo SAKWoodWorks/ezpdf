@@ -3,6 +3,7 @@
 
 runtime/*
 !runtime/jobs/
+runtime/jobs/*
 !runtime/jobs/.gitkeep
 .env
 .next/
