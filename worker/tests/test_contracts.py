@@ -3,6 +3,12 @@ import pytest
 from app.contracts import JobPayload, Operation
 
 
+def test_worker_bootstrap_module_imports():
+    from app import worker
+
+    assert callable(worker.main)
+
+
 def test_payload_accepts_known_operation():
     job = JobPayload.from_dict(
         {
