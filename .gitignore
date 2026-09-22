@@ -1,2 +1,13 @@
 .worktrees/
 .superpowers/
+
+runtime/*
+!runtime/jobs/
+!runtime/jobs/.gitkeep
+.env
+.next/
+node_modules/
+web/node_modules/
+web/.next/
+__pycache__/
+.pytest_cache/
