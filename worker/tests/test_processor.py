@@ -36,6 +36,27 @@ def test_rejects_pdf_named_as_image(tmp_path: Path):
     assert validate_input_file(fake, "image_to_pdf") == "mime_mismatch"
 
 
+def test_rejects_gif_disguised_as_png(tmp_path: Path):
+    fake = tmp_path / "photo.png"
+    Image.new("RGB", (4, 4), "red").save(fake, "GIF")
+
+    assert validate_input_file(fake, "image_to_pdf") == "unsupported_type"
+
+
+def test_accepts_a_numbered_png_upload_without_a_suffix(tmp_path: Path):
+    numbered_upload = tmp_path / "0001"
+    Image.new("RGB", (4, 4), "blue").save(numbered_upload, "PNG")
+
+    assert validate_input_file(numbered_upload, "image_to_pdf") is None
+
+
+def test_rejects_a_png_with_a_jpeg_suffix(tmp_path: Path):
+    fake = tmp_path / "photo.jpg"
+    Image.new("RGB", (4, 4), "blue").save(fake, "PNG")
+
+    assert validate_input_file(fake, "image_to_pdf") == "mime_mismatch"
+
+
 def test_job_directory_is_uuid_scoped(tmp_path: Path):
     job = JobPayload.from_dict(
         {
@@ -62,6 +83,29 @@ def test_process_job_returns_a_validation_error_for_numbered_input(tmp_path: Pat
     input_dir = tmp_path / job.id / "input"
     input_dir.mkdir(parents=True)
     (input_dir / "0001").write_bytes(b"not a PDF")
+
+    result = process_job(job, tmp_path)
+
+    assert result.output_path is None
+    assert result.error_code == "mime_mismatch"
+
+
+def test_process_job_maps_a_pillow_decompression_bomb_to_a_client_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    job = JobPayload.from_dict(
+        {
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "ownerId": "u",
+            "operation": "image_to_pdf",
+            "inputNames": ["untrusted-name.png"],
+            "options": {},
+        }
+    )
+    input_dir = tmp_path / job.id / "input"
+    input_dir.mkdir(parents=True)
+    Image.new("RGB", (4, 4), "green").save(input_dir / "0001", "PNG")
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1)
 
     result = process_job(job, tmp_path)
 

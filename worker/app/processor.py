@@ -22,6 +22,7 @@ PDF_OPERATIONS = {
     Operation.COMPRESS_PDF,
 }
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
+IMAGE_FORMAT_SUFFIXES = {"JPEG": {".jpg", ".jpeg"}, "PNG": {".png"}}
 PDF_SUFFIX = ".pdf"
 PAGE_SPEC_PATTERN = re.compile(r"^(?:all|\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*$)")
 GS_PRESETS = {"balanced": "/ebook", "smallest": "/screen"}
@@ -76,8 +77,18 @@ def validate_input_file(input_file: Path, operation: str | Operation) -> str | N
             return "unsupported_type"
         try:
             with Image.open(input_file) as image:
+                detected_format = image.format
                 image.verify()
-        except (OSError, UnidentifiedImageError):
+        except (
+            OSError,
+            UnidentifiedImageError,
+            Image.DecompressionBombError,
+            Image.DecompressionBombWarning,
+        ):
+            return "mime_mismatch"
+        if detected_format not in IMAGE_FORMAT_SUFFIXES:
+            return "unsupported_type"
+        if suffix and suffix not in IMAGE_FORMAT_SUFFIXES[detected_format]:
             return "mime_mismatch"
         return None
 
