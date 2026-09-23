@@ -13,6 +13,8 @@ export async function pocketbaseRequest<T>(endpoint: string, init: RequestInit =
     signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) {
+    if (response.status === 400 && endpoint === "collections/users/auth-refresh") throw new ApiError("UNAUTHENTICATED", 401);
+    if (response.status === 400 && endpoint === "collections/users/records") throw new ApiError("REGISTRATION_FAILED");
     if (response.status === 401 || response.status === 403) throw new ApiError("UNAUTHENTICATED", 401);
     if (response.status === 404) throw new ApiError("JOB_NOT_FOUND", 404);
     throw new ApiError("SERVICE_UNAVAILABLE", 503);

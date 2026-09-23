@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim
+FROM node:24-bookworm-slim
 
 RUN groupadd --system app && useradd --system --gid app --create-home app
 WORKDIR /app
