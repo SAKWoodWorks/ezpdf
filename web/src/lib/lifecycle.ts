@@ -1,6 +1,6 @@
 import "server-only";
 import { constants } from "node:fs";
-import { lstat, mkdir, open, realpath, unlink } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, realpath, unlink } from "node:fs/promises";
 import path from "node:path";
 import { ApiError, readLimitedBody } from "./http";
 import { assertLiveJob, assertSafeName, getOwnedJob, markJobQueued, requestCleanup, validateCreateJob, type JobRecord } from "./jobs";
@@ -23,10 +23,10 @@ async function jobDirectory(job: JobRecord, create = false): Promise<string> {
   return checkedDirectory(path.join(root, job.jobKey), create);
 }
 
-async function uploadingJob(id: string, userId: string): Promise<JobRecord> {
+async function recoverableUpload(id: string, userId: string): Promise<JobRecord> {
   const job = await getOwnedJob(id, userId);
   assertLiveJob(job);
-  if (job.status !== "uploading") throw new ApiError("INVALID_JOB_STATE", 409);
+  if (job.status !== "uploading" && job.status !== "queued") throw new ApiError("INVALID_JOB_STATE", 409);
   return job;
 }
 
@@ -45,7 +45,7 @@ async function validateFile(file: File, job: JobRecord): Promise<void> {
 }
 
 export async function uploadJob(request: Request, id: string, userId: string): Promise<{ status: "queued" }> {
-  const job = await uploadingJob(id, userId);
+  const job = await recoverableUpload(id, userId);
   validateCreateJob(job);
   const configuredLimit = Number(process.env.MAX_UPLOAD_BYTES ?? HARD_UPLOAD_LIMIT);
   if (!Number.isSafeInteger(configuredLimit) || configuredLimit <= 0) throw new ApiError("SERVICE_UNAVAILABLE", 503);
@@ -67,35 +67,68 @@ export async function uploadJob(request: Request, id: string, userId: string): P
 
   // Recheck after receiving the body, then acquire an exclusive on-disk lock.
   // This also excludes uploads reaching a second web process.
-  await uploadingJob(id, userId);
-  const directory = await jobDirectory(job, true);
+  const received = await recoverableUpload(id, userId);
+  const directory = await jobDirectory(job, received.status === "uploading");
   const lockPath = path.join(directory, ".upload.lock");
   const lock = await open(lockPath, "wx", 0o600).catch(error => {
     if (error.code === "EEXIST") throw new ApiError("UPLOAD_IN_PROGRESS", 409);
     throw error;
   });
   const written: string[] = [];
-  let mayBeQueued = false;
+  const verified: string[] = [];
+  let preserveInputs = received.status === "queued";
   try {
-    await uploadingJob(id, userId);
-    const input = await checkedDirectory(path.join(directory, "input"), true);
+    const locked = await recoverableUpload(id, userId);
+    preserveInputs = locked.status === "queued";
+    const input = await checkedDirectory(path.join(directory, "input"), !preserveInputs);
     for (let index = 0; index < files.length; index++) {
-      await uploadingJob(id, userId);
+      const current = await recoverableUpload(id, userId);
+      if (current.status === "queued") preserveInputs = true;
       await checkedDirectory(input);
       const target = path.join(input, String(index + 1).padStart(4, "0"));
-      const destination = await open(target, "wx", 0o600);
-      written.push(target);
-      try { await destination.writeFile(Buffer.from(await (files[index] as File).arrayBuffer())); }
-      finally { await destination.close(); }
+      const bytes = Buffer.from(await (files[index] as File).arrayBuffer());
+      const existing = await lstat(target).catch(error => { if (error.code !== "ENOENT") throw error; return null; });
+      if (existing) {
+        if (existing.isSymbolicLink() || !existing.isFile()) throw new ApiError("INVALID_INPUT");
+        const source = await open(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+        try {
+          if (!(await source.stat()).isFile() || !(await source.readFile()).equals(bytes)) throw new ApiError("UPLOAD_MISMATCH", 409);
+        } finally { await source.close(); }
+      } else {
+        // Never reconstruct or change inputs once a worker can consume them.
+        if (current.status !== "uploading") throw new ApiError("INVALID_JOB_STATE", 409);
+        const destination = await open(target, "wx", 0o600);
+        written.push(target);
+        try { await destination.writeFile(bytes); }
+        finally { await destination.close(); }
+      }
+      verified.push(target);
     }
+    if ((await readdir(input)).length !== files.length) throw new ApiError("INVALID_INPUT");
     // Mark first: the worker intentionally discards messages for uploading jobs.
-    // If an upstream response is lost, preserve inputs for the worker/TTL cleanup.
-    mayBeQueued = true;
-    await markJobQueued(id, userId);
+    // Reconcile at most once; an unknown outcome preserves byte-verified inputs
+    // for a later identical retry, without an unbounded background retry loop.
+    const current = await recoverableUpload(id, userId);
+    preserveInputs = true;
+    if (current.status === "uploading") {
+      try { await markJobQueued(id, userId); }
+      catch (error) {
+        const reconciled = await getOwnedJob(id, userId).catch(() => null);
+        if (reconciled?.status !== "queued") {
+          if (reconciled?.status === "uploading" && error instanceof ApiError) {
+            for (const target of verified) await unlink(target);
+          }
+          throw error;
+        }
+        assertLiveJob(reconciled);
+      }
+    }
+    // Retrying an uncertain LPUSH may produce another identical message. The
+    // single worker checks queued state before claiming, so it processes once.
     await enqueueJob(job);
     return { status: "queued" };
   } finally {
-    if (!mayBeQueued) {
+    if (!preserveInputs) {
       for (const target of written) await unlink(target).catch(() => undefined);
     }
     await lock.close();

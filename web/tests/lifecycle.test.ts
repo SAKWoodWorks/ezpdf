@@ -72,8 +72,100 @@ describe("upload lifecycle", () => {
 
   it("does not overwrite queued jobs", async () => {
     await uploadJob(upload(), "abcdefghijklmno", "owner-a");
-    await expect(uploadJob(upload(), "abcdefghijklmno", "owner-a")).rejects.toThrow("INVALID_JOB_STATE");
+    const changed = upload([new File(["%PDF-1.7 changed"], "private.pdf", { type: "application/pdf" })]);
+    await expect(uploadJob(changed, "abcdefghijklmno", "owner-a")).rejects.toThrow("UPLOAD_MISMATCH");
     expect(enqueueJob).toHaveBeenCalledOnce();
+    expect(await readFile(path.join(root, jobKey, "input", "0001"), "utf8")).toBe("%PDF-1.7\ncontent");
+  });
+
+  it("cleans inputs after a definite metadata transition failure and permits a fresh retry", async () => {
+    const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (...args) => args[1]?.method === "PATCH"
+      ? Response.json({}, { status: 503 }) : originalFetch(...args));
+    await expect(uploadJob(upload(), "abcdefghijklmno", "owner-a")).rejects.toThrow("SERVICE_UNAVAILABLE");
+    expect(record.status).toBe("uploading");
+    expect(await readdir(path.join(root, jobKey, "input"))).toEqual([]);
+    expect(enqueueJob).not.toHaveBeenCalled();
+    vi.mocked(fetch).mockImplementation(originalFetch);
+    expect(await uploadJob(upload(), "abcdefghijklmno", "owner-a")).toEqual({ status: "queued" });
+  });
+
+  it("reconciles a committed metadata transition whose response was lost", async () => {
+    const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (...args) => {
+      const response = await originalFetch(...args);
+      if (args[1]?.method === "PATCH") throw new Error("connection lost");
+      return response;
+    });
+    expect(await uploadJob(upload(), "abcdefghijklmno", "owner-a")).toEqual({ status: "queued" });
+    expect(record.status).toBe("queued");
+    expect(enqueueJob).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])("preserves inputs during an unknown metadata outcome (committed: %s) and retries safely", async committed => {
+    const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+    let unavailable = false;
+    vi.mocked(fetch).mockImplementation(async (...args) => {
+      if (args[1]?.method === "PATCH") {
+        if (committed) await originalFetch(...args);
+        unavailable = true;
+      }
+      if (unavailable) throw new Error("connection lost");
+      return originalFetch(...args);
+    });
+    await expect(uploadJob(upload(), "abcdefghijklmno", "owner-a")).rejects.toThrow("connection lost");
+    expect(await readFile(path.join(root, jobKey, "input", "0001"), "utf8")).toBe("%PDF-1.7\ncontent");
+    vi.mocked(fetch).mockImplementation(originalFetch);
+    expect(await uploadJob(upload(), "abcdefghijklmno", "owner-a")).toEqual({ status: "queued" });
+    expect(enqueueJob).toHaveBeenCalledOnce();
+  });
+
+  it("rechecks expiry after reconciling an uncertain metadata transition", async () => {
+    const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (...args) => {
+      const response = await originalFetch(...args);
+      if (args[1]?.method === "PATCH") {
+        record.expiresAt = "2000-01-01T00:00:00Z";
+        throw new Error("connection lost");
+      }
+      return response;
+    });
+    await expect(uploadJob(upload(), "abcdefghijklmno", "owner-a")).rejects.toThrow("JOB_EXPIRED");
+    expect(enqueueJob).not.toHaveBeenCalled();
+    expect(await readFile(path.join(root, jobKey, "input", "0001"), "utf8")).toBe("%PDF-1.7\ncontent");
+  });
+
+  it("does not reconstruct missing queued inputs during a retry", async () => {
+    vi.mocked(enqueueJob).mockRejectedValueOnce(new Error("Redis unavailable"));
+    await expect(uploadJob(upload(), "abcdefghijklmno", "owner-a")).rejects.toThrow("Redis unavailable");
+    await rm(path.join(root, jobKey, "input", "0001"));
+    await expect(uploadJob(upload(), "abcdefghijklmno", "owner-a")).rejects.toThrow("INVALID_JOB_STATE");
+    expect(await readdir(path.join(root, jobKey, "input"))).toEqual([]);
+    expect(enqueueJob).toHaveBeenCalledOnce();
+  });
+
+  it("republishes the exact validated upload after a Redis failure", async () => {
+    vi.mocked(enqueueJob).mockRejectedValueOnce(new Error("Redis unavailable"));
+    await expect(uploadJob(upload(), "abcdefghijklmno", "owner-a")).rejects.toThrow("Redis unavailable");
+    expect(record.status).toBe("queued");
+    expect(await readFile(path.join(root, jobKey, "input", "0001"), "utf8")).toBe("%PDF-1.7\ncontent");
+    expect(await uploadJob(upload(), "abcdefghijklmno", "owner-a")).toEqual({ status: "queued" });
+    expect(enqueueJob).toHaveBeenCalledTimes(2);
+  });
+
+  it("republishes an ambiguous Redis write without resetting processing or changing inputs", async () => {
+    const published: unknown[] = [];
+    vi.mocked(enqueueJob).mockImplementationOnce(async job => {
+      published.push(job); throw new Error("publication response lost");
+    }).mockImplementation(async job => { published.push(job); });
+    await expect(uploadJob(upload(), "abcdefghijklmno", "owner-a")).rejects.toThrow("publication response lost");
+    expect(await uploadJob(upload(), "abcdefghijklmno", "owner-a")).toEqual({ status: "queued" });
+    expect(published).toHaveLength(2);
+    expect(published[1]).toMatchObject({ id: "abcdefghijklmno", jobKey, owner: "owner-a", inputNames: ["private.pdf"] });
+    record.status = "processing";
+    await expect(uploadJob(upload(), "abcdefghijklmno", "owner-a")).rejects.toThrow("INVALID_JOB_STATE");
+    expect(record.status).toBe("processing");
+    expect(enqueueJob).toHaveBeenCalledTimes(2);
   });
 
   it("rechecks ownership before each input write and removes partial inputs", async () => {

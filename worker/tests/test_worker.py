@@ -77,6 +77,22 @@ def test_worker_decodes_utf8_and_transitions_processing_to_ready(tmp_path):
     assert api.auth_count == 1
 
 
+def test_republished_upload_message_processes_exactly_once(tmp_path):
+    api = PocketBaseAPI()
+    processed = []
+
+    def process(job, root):
+        processed.append(job.job_key)
+        return ProcessingResult(output_path=root / KEY / "output" / "result.pdf")
+
+    message = json.dumps(payload()).encode()
+    with api.client() as client:
+        assert handle_message(message, client, tmp_path, processor=process) is True
+        assert handle_message(message, client, tmp_path, processor=process) is False
+    assert processed == [KEY]
+    assert api.states == ["processing", "ready"]
+
+
 @pytest.mark.parametrize("failure", ["tool_timeout", "mime_mismatch", "password_protected"])
 def test_handled_failure_records_stable_error(tmp_path, failure):
     api = PocketBaseAPI()
