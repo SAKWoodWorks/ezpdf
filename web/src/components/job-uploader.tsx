@@ -55,8 +55,21 @@ export function JobUploader({ operation }: { operation: Operation }) {
       const response = await fetch(`/api/jobs/${uploadId}/upload`, { method: "POST", body: form });
       const result = await response.json();
       if (!response.ok) {
+        if (result.error === "INVALID_JOB_STATE") {
+          // The original upload may have succeeded even if its response was lost.
+          // Keep the ID on uncertain/queued results so retries can republish it.
+          setStage("Checking your job…");
+          const statusResponse = await fetch(`/api/jobs/${uploadId}`, { cache: "no-store" });
+          const current = await statusResponse.json();
+          if (!statusResponse.ok) { setError(errorMessage(current.error)); return; }
+          if (current.id === uploadId && ["processing", "ready", "failed", "downloaded", "expired"].includes(current.status)) {
+            setJob({ operation, inputNames: files.map(file => file.name), ...current });
+            setPendingId(null);
+            return;
+          }
+        }
         setError(errorMessage(result.error));
-        if (["JOB_EXPIRED", "JOB_NOT_FOUND", "INVALID_JOB_STATE", "UPLOAD_MISMATCH"].includes(result.error)) setPendingId(null);
+        if (["JOB_EXPIRED", "JOB_NOT_FOUND", "UPLOAD_MISMATCH"].includes(result.error)) setPendingId(null);
         return;
       }
       setJob({ id: uploadId!, status: "queued", operation, inputNames: files.map(file => file.name) });

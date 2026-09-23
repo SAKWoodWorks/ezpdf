@@ -87,6 +87,50 @@ it("retries an interrupted upload against the same job", async () => {
   expect(paths).toEqual(["/api/jobs", "/api/jobs/abcdefghijklmno/upload", "/api/jobs/abcdefghijklmno/upload"]);
 });
 
+it.each(["processing", "ready"] as const)("recovers a lost upload response when the original job is %s without creating a duplicate", async status => {
+  const requests: { url: string; method: string }[] = [];
+  let uploads = 0;
+  vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+    requests.push({ url, method: init?.method ?? "GET" });
+    if (url === "/api/jobs") return Response.json({ id: "abcdefghijklmno", status: "uploading" });
+    if (url.endsWith("/upload")) {
+      if (++uploads === 1) throw new TypeError("Upload response lost");
+      return Response.json({ error: "INVALID_JOB_STATE" }, { status: 409 });
+    }
+    return Response.json({ id: "abcdefghijklmno", status, operation: "compress_pdf", inputNames: ["a.pdf"], outputName: status === "ready" ? "result.pdf" : undefined });
+  });
+  render(<JobUploader operation="compress_pdf" />);
+  fireEvent.change(screen.getByLabelText("Choose files"), { target: { files: [new File(["pdf"], "a.pdf", { type: "application/pdf" })] } });
+  fireEvent.click(screen.getByRole("button", { name: "Compress PDF" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Retry upload" }));
+  await screen.findByText(status === "ready" ? "Ready" : "Processing");
+  expect(requests).toEqual([
+    { url: "/api/jobs", method: "POST" },
+    { url: "/api/jobs/abcdefghijklmno/upload", method: "POST" },
+    { url: "/api/jobs/abcdefghijklmno/upload", method: "POST" },
+    { url: "/api/jobs/abcdefghijklmno", method: "GET" },
+  ]);
+  expect(screen.queryByRole("button", { name: "Retry upload" })).not.toBeInTheDocument();
+  if (status === "ready") expect(screen.getByRole("button", { name: "Download result" })).toBeInTheDocument();
+});
+
+it("retains the original job when status reconciliation is unavailable", async () => {
+  let creations = 0;
+  let statusReads = 0;
+  vi.stubGlobal("fetch", async (url: string) => {
+    if (url === "/api/jobs") { creations++; return Response.json({ id: "abcdefghijklmno", status: "uploading" }); }
+    if (url.endsWith("/upload")) return Response.json({ error: "INVALID_JOB_STATE" }, { status: 409 });
+    return ++statusReads === 1 ? Response.json({ error: "SERVICE_UNAVAILABLE" }, { status: 503 }) : Response.json({ id: "abcdefghijklmno", status: "ready", outputName: "result.pdf" });
+  });
+  render(<JobUploader operation="compress_pdf" />);
+  fireEvent.change(screen.getByLabelText("Choose files"), { target: { files: [new File(["pdf"], "a.pdf", { type: "application/pdf" })] } });
+  fireEvent.click(screen.getByRole("button", { name: "Compress PDF" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Retry upload" }));
+  await screen.findByText("Ready");
+  expect(creations).toBe(1);
+  expect(statusReads).toBe(2);
+});
+
 it.each([
   ["split_pdf", "Pages to extract", "2-4,6", { pageRange: "2-4,6" }, "Split PDF"],
   ["pdf_to_image", "Image format", "jpg", { imageFormat: "jpg" }, "PDF to image"],

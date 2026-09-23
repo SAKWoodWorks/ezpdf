@@ -4,7 +4,7 @@ export const TOOLS: Record<Operation, { title: string; description: string; inpu
   image_to_pdf: { title: "Image to PDF", description: "Turn your images into one PDF, in the order you choose.", input: "PNG or JPG images", accept: ".png,.jpg,.jpeg,image/png,image/jpeg", multiple: true },
   pdf_to_image: { title: "PDF to image", description: "Export each page as an image, collected in a ZIP file.", input: "One PDF file", accept: ".pdf,application/pdf", multiple: false },
   merge_pdf: { title: "Merge PDF", description: "Bring your PDFs together into a single document.", input: "Two or more PDF files", accept: ".pdf,application/pdf", multiple: true },
-  split_pdf: { title: "Split PDF", description: "Extract the pages you need into a new PDF.", input: "One PDF file", accept: ".pdf,application/pdf", multiple: false },
+  split_pdf: { title: "Split PDF", description: "Extract the pages you need as individual PDF files, collected in a ZIP file.", input: "One PDF file", accept: ".pdf,application/pdf", multiple: false },
   compress_pdf: { title: "Compress PDF", description: "Make a PDF smaller for sharing and everyday use.", input: "One PDF file", accept: ".pdf,application/pdf", multiple: false },
 };
 
