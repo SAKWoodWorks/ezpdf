@@ -57,6 +57,7 @@ def handle_message(message, metadata, jobs_dir, *, processor=process_job,
         record = metadata.get_job(job.record_id)
     except httpx.HTTPStatusError as error:
         if error.response.status_code == 404:
+            logger.warning("Discarded queue message for missing job record %s", job.record_id)
             return False
         raise
     resuming_claim = pending_claim == job and record.get("status") == "processing"
