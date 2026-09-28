@@ -6,28 +6,28 @@ EZpdf is a localhost-first PDF workbench. Authenticated users can convert
 images to PDF, export PDF pages as images, merge PDFs, split PDFs, and compress
 PDFs with either a balanced or smallest-file preset. User files are temporary:
 they are deleted after a successful download or when their job expires.
+Cloudflare R2 storage is intentionally deferred.
 
 ## Repository layout
 
-`master` currently contains the project design and implementation plan only.
-The working application is in the linked worktree at
-`.worktrees/local-pdf-manager` on branch `feat/local-pdf-manager`.
-
-Run application commands from that worktree unless you are specifically editing
-the planning documentation in the repository root.
+The application was developed in the `.worktrees/local-pdf-manager` worktree
+and has been fully merged into `master`; the repository root is now the
+canonical home of the working application.
 
 ```text
 .
-├── docs/superpowers/                 # Design and implementation plan
-├── PROJECT.md                        # This guide
-└── .worktrees/local-pdf-manager/     # Active application worktree
-    ├── web/                          # Next.js 16 / React 19 application
-    ├── worker/                       # Python PDF-processing queue worker
-    ├── pocketbase/                   # PocketBase image and migrations
-    ├── runtime/jobs/                 # Temporary job files (gitignored)
-    ├── scripts/smoke-test.ps1        # End-to-end local smoke test
-    └── docker-compose.yml            # Local service stack
+├── docs/superpowers/         # Design spec and implementation plan
+├── PROJECT.md                # This guide
+├── README.md                 # Operational instructions
+├── docker-compose.yml        # Local service stack
+├── web/                      # Next.js 16 / React 19 application
+├── worker/                   # Python PDF-processing queue worker
+├── pocketbase/               # PocketBase image and migrations
+├── runtime/jobs/             # Temporary job files (gitignored)
+└── scripts/smoke-test.ps1    # End-to-end local smoke test
 ```
+
+Run application commands from the repository root.
 
 ## Architecture
 
@@ -60,7 +60,7 @@ ports. Redis and the worker remain on an internal Docker network.
 
 ## Local setup
 
-From `.worktrees/local-pdf-manager`:
+From the repository root:
 
 ```powershell
 Copy-Item .env.example .env
@@ -78,24 +78,11 @@ docker compose exec pocketbase sh -c 'pocketbase superuser upsert "$POCKETBASE_S
 Create a normal application account at `http://localhost:3000/register`.
 PocketBase administration is available at `http://localhost:8090/_/`.
 
-## Configuration
-
-| Variable | Default | Meaning |
-| --- | ---: | --- |
-| `POCKETBASE_SUPERUSER_EMAIL` | required | PocketBase administrative email |
-| `POCKETBASE_SUPERUSER_PASSWORD` | required | PocketBase administrative password |
-| `MAX_UPLOAD_BYTES` | `104857600` | Maximum total upload size per job (100 MiB) |
-| `JOB_TTL_SECONDS` | `3600` | Temporary file lifetime from job creation |
-| `POCKETBASE_URL` | `http://pocketbase:8090` | Internal PocketBase service URL |
-| `REDIS_URL` | `redis://redis:6379/0` | Internal Redis service URL |
-| `JOBS_DIR` | `/jobs` | Container path for temporary job files |
-
-The Compose stack fixes the internal URLs and job directory; changing their
-example values in `.env` does not rewire Compose.
+See `README.md` for the detailed operational instructions.
 
 ## Verification
 
-With the stack running, run:
+With the stack running:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1
@@ -124,8 +111,8 @@ the temporary job directory is removed.
 
 ## Current development status
 
-The active worktree contains the implemented application and has additional
-uncommitted end-to-end documentation/health-check changes. Consult its
-`README.md` for the most detailed operational instructions, and the root
-`docs/superpowers/specs/2026-09-22-local-pdf-manager-design.md` for the
-authoritative product design.
+All seven implementation-plan tasks are complete and merged into `master`.
+The deployed feature set matches
+`docs/superpowers/specs/2026-09-22-local-pdf-manager-design.md`, which is the
+authoritative product design. Deferred follow-ups include Cloudflare R2 file
+storage and any multi-worker queue hardening.
