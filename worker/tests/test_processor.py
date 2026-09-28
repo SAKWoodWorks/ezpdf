@@ -57,6 +57,31 @@ def test_rejects_a_png_with_a_jpeg_suffix(tmp_path: Path):
     assert validate_input_file(fake, "image_to_pdf") == "mime_mismatch"
 
 
+def test_rejects_a_png_with_a_broken_idat_checksum(tmp_path: Path):
+    # Same pixels as a valid fixture, but the stored IDAT CRC is corrupted so
+    # Pillow rejects the file during verify() with a SyntaxError.
+    import base64
+
+    raw = bytearray(
+        base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1Pe"
+            "AAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+        )
+    )
+    offset = 8
+    while offset + 8 <= len(raw):
+        length = int.from_bytes(raw[offset : offset + 4], "big")
+        if raw[offset + 4 : offset + 8] == b"IDAT":
+            crc_at = offset + 8 + length
+            raw[crc_at : crc_at + 4] = b"\x00\x00\x00\x00"
+            break
+        offset += 12 + length
+    broken = tmp_path / "smoke.png"
+    broken.write_bytes(bytes(raw))
+
+    assert validate_input_file(broken, "image_to_pdf") == "mime_mismatch"
+
+
 def test_job_directory_is_uuid_scoped(tmp_path: Path):
     job = JobPayload.from_dict(
         {

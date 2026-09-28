@@ -8,6 +8,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
+import zlib
 
 from PIL import Image, UnidentifiedImageError
 
@@ -81,6 +82,9 @@ def validate_input_file(input_file: Path, operation: str | Operation) -> str | N
                 image.verify()
         except (
             OSError,
+            SyntaxError,
+            ValueError,
+            zlib.error,
             UnidentifiedImageError,
             Image.DecompressionBombError,
             Image.DecompressionBombWarning,
