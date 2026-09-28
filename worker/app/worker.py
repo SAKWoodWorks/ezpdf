@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import signal
 from threading import Event
@@ -11,8 +12,8 @@ import httpx
 from redis import Redis, RedisError
 
 from app.cleanup import (
-    cleanup_jobs, expire_job, job_is_expired, recover_processing_jobs,
-    remove_job_directory,
+    cleanup_jobs, expire_job, job_is_expired, parse_timestamp,
+    recover_processing_jobs, remove_job_directory,
 )
 from app.contracts import JobPayload
 from app.pocketbase_client import PocketBaseClient
@@ -22,6 +23,10 @@ logger = logging.getLogger(__name__)
 QUEUE_NAME = "pdf-jobs"
 ERROR_CODES = {"processing_failed", "input_too_large", "unsupported_type", "mime_mismatch",
                "invalid_page_range", "password_protected", "tool_timeout"}
+# A queued record older than this lost its queue message; the web service
+# marks the record queued before publishing, so a healthy publish never
+# lags this far behind creation.
+REQUEUE_GRACE_SECONDS = 60
 
 
 class PendingResultWrite(Exception):
@@ -92,11 +97,56 @@ def handle_message(message, metadata, jobs_dir, *, processor=process_job,
     return True
 
 
+def requeue_stale_queued_jobs(queue, metadata, ttl_seconds, requeued_ids, *, now=None):
+    """Republish payloads for queued jobs whose queue message was lost.
+
+    A lost message leaves a queued record stuck until expiry. Republishing a
+    duplicate is safe because the claim check discards messages for records
+    that left the queued state, and each record is republished at most once
+    per worker process.
+    """
+    now = now or datetime.now(UTC)
+    for record in metadata.list_jobs(status="queued"):
+        record_id = record.get("id")
+        if not isinstance(record_id, str) or record_id in requeued_ids:
+            continue
+        created_at = record.get("createdAt")
+        if not created_at or job_is_expired(record, ttl_seconds, now=now):
+            # Unreadable or already-expired records stay on the cleanup path.
+            requeued_ids.add(record_id)
+            continue
+        if parse_timestamp(created_at) + timedelta(seconds=REQUEUE_GRACE_SECONDS) > now:
+            continue
+        try:
+            job = JobPayload.from_dict({
+                "recordId": record_id,
+                "jobKey": record["jobKey"],
+                "ownerId": record["owner"],
+                "operation": record["operation"],
+                "inputNames": record["inputNames"],
+                "options": record["options"] or {},
+            })
+        except (ValueError, KeyError, TypeError):
+            logger.warning("Queued job %s cannot be republished; leaving it to expiry", record_id)
+            requeued_ids.add(record_id)
+            continue
+        queue.lpush(QUEUE_NAME, json.dumps({
+            "recordId": job.record_id,
+            "jobKey": job.job_key,
+            "ownerId": job.owner_id,
+            "operation": job.operation.value,
+            "inputNames": job.input_names,
+            "options": job.options,
+        }))
+        requeued_ids.add(record_id)
+
+
 def run_worker(queue, metadata, jobs_dir, ttl_seconds, stop):
     recover_processing_jobs(jobs_dir, metadata)
     pending_message = None
     pending_result = None
     pending_claim = None
+    requeued_ids = set()
     orphaned_job_keys = set()
     while not stop.is_set():
         try:
@@ -119,6 +169,7 @@ def run_worker(queue, metadata, jobs_dir, ttl_seconds, stop):
                 except (OSError, ValueError):
                     logger.warning("Deleted record folder cleanup deferred")
             cleanup_jobs(jobs_dir, metadata, ttl_seconds)
+            requeue_stale_queued_jobs(queue, metadata, ttl_seconds, requeued_ids)
             if pending_message is None:
                 item = queue.brpop(QUEUE_NAME, timeout=5)
                 if item is None:

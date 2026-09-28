@@ -22,7 +22,8 @@ def payload(**changes):
 class PocketBaseAPI:
     def __init__(self, **changes):
         self.record = {"id": RECORD_ID, "jobKey": KEY, "owner": "user1", "status": "queued",
-                       "operation": "image_to_pdf", "inputNames": ["ภาพ.png"],
+                       "operation": "image_to_pdf", "inputNames": ["ภาพ.png"], "options": {},
+                       "createdAt": datetime.now(UTC).isoformat(),
                        "expiresAt": (datetime.now(UTC) + timedelta(hours=1)).isoformat(), **changes}
         self.states = []
         self.auth_count = 0
@@ -38,7 +39,13 @@ class PocketBaseAPI:
             self.record.update(json.loads(request.content))
             self.states.append(self.record["status"])
         if request.url.path.endswith("/records"):
-            records = [self.record] if not request.url.params.get("filter") or self.record["status"] == "processing" else []
+            status_filter = request.url.params.get("filter")
+            if not status_filter:
+                records = [self.record]
+            elif status_filter == f'status = "{self.record["status"]}"':
+                records = [self.record]
+            else:
+                records = []
             return httpx.Response(200, json={"page": 1, "perPage": 200, "totalPages": 1,
                                            "totalItems": len(records), "items": records})
         return httpx.Response(200, json=self.record)
@@ -334,3 +341,51 @@ def test_deleted_record_during_result_write_cleans_folder_and_continues_queue(
     assert not (tmp_path / downloaded_key).exists()
     assert (tmp_path / second_key).exists()
     assert (tmp_path / "untracked").exists()
+
+
+class RecordingQueue:
+    def __init__(self, stop, passes=2):
+        self.stop = stop
+        self.passes = passes
+        self.calls = 0
+        self.pushed = []
+
+    def lpush(self, name, message):
+        self.pushed.append((name, message))
+
+    def brpop(self, name, timeout):
+        assert name == "pdf-jobs"
+        self.calls += 1
+        if self.calls >= self.passes:
+            self.stop.stopped = True
+        return None
+
+
+def test_stale_queued_message_is_republished_once_per_process(tmp_path):
+    stale = (datetime.now(UTC) - timedelta(minutes=10)).isoformat()
+    api = PocketBaseAPI(createdAt=stale)
+    stop = BoundedStop()
+    queue = RecordingQueue(stop)
+    with api.client() as client:
+        run_worker(queue, client, tmp_path, 3600, stop)
+    expected = json.dumps({"recordId": RECORD_ID, "jobKey": KEY, "ownerId": "user1",
+                           "operation": "image_to_pdf", "inputNames": ["ภาพ.png"], "options": {}})
+    assert queue.pushed == [("pdf-jobs", expected)]
+
+
+def test_fresh_queued_job_is_not_republished(tmp_path):
+    api = PocketBaseAPI()
+    stop = BoundedStop()
+    queue = RecordingQueue(stop)
+    with api.client() as client:
+        run_worker(queue, client, tmp_path, 3600, stop)
+    assert queue.pushed == []
+
+
+def test_republish_skips_queued_job_without_usable_metadata(tmp_path):
+    api = PocketBaseAPI(createdAt=None)
+    stop = BoundedStop()
+    queue = RecordingQueue(stop)
+    with api.client() as client:
+        run_worker(queue, client, tmp_path, 3600, stop)
+    assert queue.pushed == []
