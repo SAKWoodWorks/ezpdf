@@ -46,7 +46,7 @@ try {
 
     $null = New-Item -ItemType Directory -Path $runDirectory -Force
     $pngPath = Join-Path $runDirectory "smoke.png"
-    $png = [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aJ1sAAAAASUVORK5CYII=')
+    $png = [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAAQklEQVR4nO3OQQ0AIAwAsalDGOqQhQuOR5MK6Kx9vjL5QEhISKgeCAkJCdUDISEhoXogJCQkVA+EhISE6oGQkNBjFz0AENNUjHRQAAAAAElFTkSuQmCC')
     [IO.File]::WriteAllBytes($pngPath, $png)
     $job = Invoke-Json POST "api/jobs" @{ operation = "image_to_pdf"; inputNames = @("smoke.png"); options = @{} }
     if ($job.id -notmatch '^[a-zA-Z0-9]{15}$') { throw "Invalid job ID" }
