@@ -10,10 +10,15 @@ export function apiError(error: unknown): Response {
 }
 
 export function assertSameOrigin(request: Request): void {
+  if (request.headers.get("sec-fetch-site") === "cross-site") throw new ApiError("FORBIDDEN", 403);
   const origin = request.headers.get("origin");
-  if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site") === "cross-site") {
-    throw new ApiError("FORBIDDEN", 403);
-  }
+  if (!origin) return;
+  // request.url reflects the server bind hostname, not the host the browser
+  // connected to, so same-origin is judged against the forwarded Host header.
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  let originHost: string | null = null;
+  try { originHost = new URL(origin).host; } catch { originHost = null; }
+  if (!host || originHost !== host) throw new ApiError("FORBIDDEN", 403);
 }
 
 export async function readLimitedBody(request: Request, limit: number): Promise<Uint8Array> {

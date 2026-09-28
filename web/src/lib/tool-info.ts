@@ -16,6 +16,8 @@ export type PublicJob = {
 const ERRORS: Record<string, string> = {
   UNAUTHENTICATED: "Your session ended. Sign in again to continue.",
   INVALID_CREDENTIALS: "Check your email and password, then try again.",
+  FORBIDDEN: "This request was blocked. Reload the page and try again.",
+  SERVICE_UNAVAILABLE: "The service is temporarily unavailable. Try again in a moment.",
   INVALID_INPUT: "Check your files and options, then try again.",
   REGISTRATION_FAILED: "Could not create this account. Check your details or sign in if you already have an account.",
   INPUT_TOO_LARGE: "These files are too large. Choose smaller files and try again.",
