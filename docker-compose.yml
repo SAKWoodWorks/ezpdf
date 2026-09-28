@@ -15,6 +15,7 @@ services:
       JOB_TTL_SECONDS: ${JOB_TTL_SECONDS:-3600}
     volumes: [./runtime/jobs:/jobs]
     ports: ["127.0.0.1:3000:3000"]
+    networks: [default, backend]
     depends_on:
       jobs-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
@@ -29,6 +30,7 @@ services:
       JOBS_DIR: /jobs
       JOB_TTL_SECONDS: ${JOB_TTL_SECONDS:-3600}
     volumes: [./runtime/jobs:/jobs]
+    networks: [backend]
     depends_on:
       jobs-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
@@ -38,6 +40,7 @@ services:
         limits: { cpus: "1.0", memory: 1536M }
   redis:
     image: redis:7-alpine
+    networks: [backend]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -49,6 +52,7 @@ services:
       POCKETBASE_SUPERUSER_EMAIL: ${POCKETBASE_SUPERUSER_EMAIL:?Set a PocketBase superuser email}
       POCKETBASE_SUPERUSER_PASSWORD: ${POCKETBASE_SUPERUSER_PASSWORD:?Set a PocketBase superuser password}
     ports: ["127.0.0.1:8090:8090"]
+    networks: [default, backend]
     volumes:
       - pocketbase_data:/pb_data
       - ./pocketbase/pb_migrations:/pb_migrations:ro
@@ -59,6 +63,11 @@ services:
       retries: 10
 volumes:
   pocketbase_data:
+# The backend network is internal (no host or internet route), so worker and
+# redis stay isolated; web and pocketbase join it for redis/PocketBase access
+# while their published host ports ride the default network, because Docker
+# Desktop does not forward ports for containers that only have internal IPs.
 networks:
-  default:
+  default: {}
+  backend:
     internal: true
