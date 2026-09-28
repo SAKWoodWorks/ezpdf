@@ -68,7 +68,8 @@ it("polls only active jobs and exposes download only when ready", async () => {
   await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
   expect(screen.getByRole("button", { name: /download/i })).toBeInTheDocument();
   await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
-  expect(fetcher).toHaveBeenCalledTimes(1);
+  const statusPolls = fetcher.mock.calls.filter(([url]) => String(url) === "/api/jobs/abcdefghijklmno");
+  expect(statusPolls).toHaveLength(1);
 });
 
 it("retries an interrupted upload against the same job", async () => {
@@ -109,6 +110,7 @@ it.each(["processing", "ready"] as const)("recovers a lost upload response when 
     { url: "/api/jobs/abcdefghijklmno/upload", method: "POST" },
     { url: "/api/jobs/abcdefghijklmno/upload", method: "POST" },
     { url: "/api/jobs/abcdefghijklmno", method: "GET" },
+    ...(status === "ready" ? [{ url: "/api/jobs/abcdefghijklmno/thumbnails", method: "GET" }] : []),
   ]);
   expect(screen.queryByRole("button", { name: "Retry upload" })).not.toBeInTheDocument();
   if (status === "ready") expect(screen.getByRole("button", { name: "Download result" })).toBeInTheDocument();
@@ -120,6 +122,7 @@ it("retains the original job when status reconciliation is unavailable", async (
   vi.stubGlobal("fetch", async (url: string) => {
     if (url === "/api/jobs") { creations++; return Response.json({ id: "abcdefghijklmno", status: "uploading" }); }
     if (url.endsWith("/upload")) return Response.json({ error: "INVALID_JOB_STATE" }, { status: 409 });
+    if (url.endsWith("/thumbnails")) return Response.json({ pages: 1 });
     return ++statusReads === 1 ? Response.json({ error: "SERVICE_UNAVAILABLE" }, { status: 503 }) : Response.json({ id: "abcdefghijklmno", status: "ready", outputName: "result.pdf" });
   });
   render(<JobUploader operation="compress_pdf" />);

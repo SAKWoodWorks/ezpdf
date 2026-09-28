@@ -7,6 +7,7 @@ import { assertLiveJob, assertSafeName, getOwnedJob, markJobQueued, requestClean
 import { enqueueJob } from "./queue";
 
 const HARD_UPLOAD_LIMIT = 200 * 1024 * 1024;
+const THUMBNAIL_MAX_PAGE = 50;
 
 async function checkedDirectory(directory: string, create = false): Promise<string> {
   if (create) await mkdir(directory, { recursive: false }).catch(error => { if (error.code !== "EEXIST") throw error; });
@@ -136,8 +137,24 @@ export async function uploadJob(request: Request, id: string, userId: string): P
   }
 }
 
-export async function downloadJob(id: string, userId: string): Promise<Response> {
-  const job = await getOwnedJob(id, userId);
+export async function countThumbnails(job: JobRecord): Promise<number> {
+  const directory = await jobDirectory(job).catch(() => null);
+  if (!directory) return 0;
+  const names = await readdir(path.join(directory, "output", "thumbs")).catch(() => [] as string[]);
+  return names.filter(name => /^thumb-\d+\.jpg$/.test(name)).length;
+}
+
+export async function readThumbnail(job: JobRecord, page: number): Promise<Buffer | null> {
+  if (!Number.isSafeInteger(page) || page < 1 || page > THUMBNAIL_MAX_PAGE) return null;
+  const thumbs = await checkedDirectory(path.join(await jobDirectory(job), "output", "thumbs"));
+  const target = path.join(thumbs, `thumb-${page}.jpg`);
+  const info = await lstat(target).catch(error => { if (error.code !== "ENOENT") throw error; return null; });
+  if (!info || info.isSymbolicLink() || !info.isFile()) return null;
+  const source = await open(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  try { return await source.readFile(); } finally { await source.close(); }
+}
+
+export async function downloadJob(id: string, userId: string): Promise<Response> {  const job = await getOwnedJob(id, userId);
   assertLiveJob(job);
   if (job.status !== "ready") throw new ApiError("INVALID_JOB_STATE", 409);
   assertSafeName(job.outputName);

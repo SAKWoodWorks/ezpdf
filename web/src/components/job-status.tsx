@@ -7,6 +7,17 @@ export function JobStatus({ initialJob }: { initialJob: PublicJob }) {
   const [job, setJob] = useState(initialJob);
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [pages, setPages] = useState(0);
+
+  useEffect(() => {
+    if (job.status !== "ready") { setPages(0); return; }
+    const controller = new AbortController();
+    fetch(`/api/jobs/${job.id}/thumbnails`, { cache: "no-store", signal: controller.signal })
+      .then(response => response.ok ? response.json() : { pages: 0 })
+      .then(result => setPages(Number(result.pages) || 0))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [job.id, job.status]);
 
   useEffect(() => {
     if (job.status !== "queued" && job.status !== "processing") return;
@@ -74,6 +85,13 @@ export function JobStatus({ initialJob }: { initialJob: PublicJob }) {
       {job.expiresAt && !["expired", "downloaded"].includes(job.status) && <p className="field-help">Expires <time dateTime={job.expiresAt}>{new Date(job.expiresAt).toISOString().replace("T", " ").slice(0, 16)} UTC</time></p>}
       {error && <p role="alert" className="error-message">{error}</p>}
     </div>
+    {job.status === "ready" && pages > 0 && (
+      <div className="thumb-strip" aria-label="Page previews">
+        {Array.from({ length: Math.min(pages, 50) }, (_, index) => (
+          <img key={index + 1} src={`/api/jobs/${job.id}/thumbnails/${index + 1}`} alt={`Page ${index + 1} preview`} loading="lazy" width={120} height={120} />
+        ))}
+      </div>
+    )}
     {job.status === "ready" && <button className="button primary" disabled={downloading} onClick={download}>{downloading ? "Downloading…" : "Download result"}</button>}
   </article>;
 }

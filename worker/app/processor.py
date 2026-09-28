@@ -14,6 +14,7 @@ from PIL import Image, UnidentifiedImageError
 
 from app.config import MAX_INPUT_BYTES, TOOL_TIMEOUT_SECONDS
 from app.contracts import JobPayload, Operation
+from app.thumbnails import generate_thumbnails
 
 
 PDF_OPERATIONS = {
@@ -224,6 +225,11 @@ def process_job(job: JobPayload, jobs_dir: Path) -> ProcessingResult:
             process_compress(inputs[0], output, preset)
         else:
             return ProcessingResult(error_code="unsupported_type")
+        try:
+            generate_thumbnails(output, output_dir)
+        except Exception:
+            # Previews are best-effort and never fail a finished job.
+            pass
         return ProcessingResult(output_path=output)
     except InvalidPageRange:
         return ProcessingResult(error_code="invalid_page_range")
