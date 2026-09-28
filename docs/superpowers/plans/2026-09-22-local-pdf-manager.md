@@ -453,6 +453,58 @@ git add README.md scripts/smoke-test.ps1 docker-compose.yml web/src/app/api/heal
 git commit -m "docs: add local setup and end-to-end PDF smoke test"
 ```
 
+### Task 8: Queue message loss reconciliation
+
+**Files:**
+- Modify: `worker/app/worker.py`
+- Modify: `worker/tests/test_worker.py`
+
+**Interfaces:**
+- Consumes queued PocketBase job records and the Redis `pdf-jobs` list inside
+  the existing consumer loop.
+- Produces `requeue_stale_queued_jobs(queue, metadata, ttl_seconds, requeued_ids)`,
+  which republishes the web payload shape for queued records older than a
+  60-second grace period, at most once per record per worker process.
+
+- [x] **Step 1: Write failing tests**
+
+Cover three behaviors: a queued record whose creation time is older than the
+grace period is republished exactly once across repeated sweeps; a fresh
+queued record is never republished; a record without usable metadata is
+skipped instead of raising. Run with the source bind-mounted so the suite
+reflects the working tree rather than the baked image.
+
+- [x] **Step 2: Run the tests**
+
+Run: `docker compose run --rm -v ./worker:/app worker pytest tests/test_worker.py -q`
+
+Expected: the stale-record test FAILS because no republish exists; the two
+guard tests pass against the absent feature and pin it afterward.
+
+- [x] **Step 3: Implement the republish**
+
+Add `requeue_stale_queued_jobs` to `app/worker.py` and call it after
+`cleanup_jobs` in the consumer loop. Records already expired or without a
+usable `createdAt` are left to the normal cleanup path; records failing
+payload validation are logged once and skipped. Duplicates are safe because
+the claim check discards messages for records that left the queued state,
+which is the same guarantee the web upload retry relies on.
+
+- [x] **Step 4: Run full verification**
+
+Run: `docker compose build worker && docker compose run --rm worker pytest -q`
+
+Expected: 75 tests PASS. Live check: stop the worker, create and upload a
+job, delete the `pdf-jobs` queue entry, wait past the grace period, start the
+worker, and observe the job reach `ready` with a downloadable PDF.
+
+- [x] **Step 5: Commit**
+
+```bash
+git add worker/app/worker.py worker/tests/test_worker.py
+git commit -m "feat: republish lost queue messages for queued jobs"
+```
+
 ## Plan self-review
 
 - Spec coverage: Tasks 1–7 cover all five PDF tools, authentication, PocketBase metadata, Redis queue, temporary files, expiry, worker restrictions, security validation, UI, tests, Docker Compose, and future R2 isolation.
