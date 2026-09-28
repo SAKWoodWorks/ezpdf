@@ -7,6 +7,9 @@ RUN apt-get update \
     && useradd --uid 10001 --gid app --create-home app
 
 WORKDIR /app
+# Bare `pytest` (a console script) does not put the working directory on
+# sys.path; PYTHONPATH keeps the documented `pytest -q` invocation runnable.
+ENV PYTHONPATH=/app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
 COPY --chown=app:app app ./app
