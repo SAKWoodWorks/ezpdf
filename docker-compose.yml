@@ -11,7 +11,7 @@ services:
       POCKETBASE_SUPERUSER_PASSWORD: ${POCKETBASE_SUPERUSER_PASSWORD:?Set a PocketBase superuser password}
       REDIS_URL: redis://redis:6379/0
       JOBS_DIR: /jobs
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-104857600}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-209715200}
       JOB_TTL_SECONDS: ${JOB_TTL_SECONDS:-3600}
     volumes: [./runtime/jobs:/jobs]
     ports: ["127.0.0.1:3000:3000"]
@@ -28,6 +28,7 @@ services:
       POCKETBASE_SUPERUSER_PASSWORD: ${POCKETBASE_SUPERUSER_PASSWORD:?Set a PocketBase superuser password}
       REDIS_URL: redis://redis:6379/0
       JOBS_DIR: /jobs
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-209715200}
       JOB_TTL_SECONDS: ${JOB_TTL_SECONDS:-3600}
     volumes: [./runtime/jobs:/jobs]
     networks: [backend]

@@ -51,7 +51,7 @@ amd64 and arm64 release binaries.
 | Variable | Compose behavior |
 | --- | --- |
 | `POCKETBASE_SUPERUSER_EMAIL`, `POCKETBASE_SUPERUSER_PASSWORD` | Required in `.env`; used only by trusted services and initial setup. |
-| `MAX_UPLOAD_BYTES` | Optional; defaults to 104857600 bytes. The web upload body limit cannot exceed 100 MiB. Multipart overhead counts toward this limit. |
+| `MAX_UPLOAD_BYTES` | Optional; defaults to 209715200 bytes (200 MiB). The web upload body limit cannot exceed 200 MiB. Multipart overhead counts toward this limit. |
 | `JOB_TTL_SECONDS` | Optional; defaults to 3600 seconds from job creation. Must be a positive integer. |
 | `POCKETBASE_URL` | Fixed to `http://pocketbase:8090` inside Compose. |
 | `REDIS_URL` | Fixed to `redis://redis:6379/0` inside Compose. |

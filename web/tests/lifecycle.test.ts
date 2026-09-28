@@ -42,6 +42,17 @@ describe("upload lifecycle", () => {
     expect(enqueueJob).toHaveBeenCalledOnce();
   });
 
+  it("accepts a configured limit above 100 MiB up to the 200 MiB hard cap", async () => {
+    vi.stubEnv("MAX_UPLOAD_BYTES", "1048576000");
+    record.operation = "image_to_pdf";
+    record.inputNames = ["big.png"];
+    const bytes = new Uint8Array(150 * 1024 * 1024);
+    bytes.set([137, 80, 78, 71, 13, 10, 26, 10]);
+    expect(await uploadJob(upload([new File([bytes], "big.png", { type: "image/png" })]), "abcdefghijklmno", "owner-a"))
+      .toEqual({ status: "queued" });
+    expect(enqueueJob).toHaveBeenCalledOnce();
+  });
+
   it("rejects another owner before creating folders", async () => {
     await expect(uploadJob(upload(), "abcdefghijklmno", "owner-b")).rejects.toThrow("JOB_NOT_FOUND");
     expect(await readdir(root)).toEqual([]);

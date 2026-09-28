@@ -34,7 +34,7 @@ export function JobUploader({ operation }: { operation: Operation }) {
       setError(operation === "merge_pdf" ? "Choose between 2 and 100 PDF files." : tool.multiple ? "Choose between 1 and 100 images." : "Choose one PDF file."); return;
     }
     if (files.some(file => !file.size || !(operation === "image_to_pdf" ? /\.(png|jpe?g)$/i : /\.pdf$/i).test(file.name))) { setError(errorMessage("UNSUPPORTED_TYPE")); return; }
-    if (files.reduce((total, file) => total + file.size, 0) > 100 * 1024 * 1024) { setError(errorMessage("INPUT_TOO_LARGE")); return; }
+    if (files.reduce((total, file) => total + file.size, 0) > 200 * 1024 * 1024) { setError(errorMessage("INPUT_TOO_LARGE")); return; }
     const pages = pageRange.replace(/\s/g, "");
     if (operation === "split_pdf" && (!/^\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*$/.test(pages) || pages.split(",").some(part => { const [start, end = start] = part.split("-").map(Number); return !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start; }))) { setError("Enter valid pages, such as 1-3,5."); return; }
     uploading.current = true; setBusy(true);

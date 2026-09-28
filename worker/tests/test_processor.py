@@ -201,3 +201,9 @@ def test_compress_writes_a_pdf(one_page_pdf: Path, tmp_path: Path, preset: str):
     process_compress(one_page_pdf, output, preset)
 
     assert output.read_bytes().startswith(b"%PDF-")
+
+
+def test_input_limit_matches_the_web_upload_contract():
+    from app.config import MAX_INPUT_BYTES
+
+    assert MAX_INPUT_BYTES == 200 * 1024 * 1024

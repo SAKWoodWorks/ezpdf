@@ -6,7 +6,7 @@ import { ApiError, readLimitedBody } from "./http";
 import { assertLiveJob, assertSafeName, getOwnedJob, markJobQueued, requestCleanup, validateCreateJob, type JobRecord } from "./jobs";
 import { enqueueJob } from "./queue";
 
-const HARD_UPLOAD_LIMIT = 104857600;
+const HARD_UPLOAD_LIMIT = 200 * 1024 * 1024;
 
 async function checkedDirectory(directory: string, create = false): Promise<string> {
   if (create) await mkdir(directory, { recursive: false }).catch(error => { if (error.code !== "EEXIST") throw error; });
