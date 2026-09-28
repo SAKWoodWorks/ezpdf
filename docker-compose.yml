@@ -1,4 +1,8 @@
 services:
+  jobs-init:
+    image: alpine:3.21
+    command: ["chown", "10001:10001", "/jobs"]
+    volumes: [./runtime/jobs:/jobs]
   web:
     build: ./web
     environment:
@@ -7,10 +11,14 @@ services:
       POCKETBASE_SUPERUSER_PASSWORD: ${POCKETBASE_SUPERUSER_PASSWORD:?Set a PocketBase superuser password}
       REDIS_URL: redis://redis:6379/0
       JOBS_DIR: /jobs
-      MAX_UPLOAD_BYTES: "104857600"
-      JOB_TTL_SECONDS: "3600"
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-104857600}
+      JOB_TTL_SECONDS: ${JOB_TTL_SECONDS:-3600}
     volumes: [./runtime/jobs:/jobs]
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      jobs-init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      pocketbase: { condition: service_healthy }
   worker:
     build: ./worker
     environment:
@@ -19,18 +27,36 @@ services:
       POCKETBASE_SUPERUSER_PASSWORD: ${POCKETBASE_SUPERUSER_PASSWORD:?Set a PocketBase superuser password}
       REDIS_URL: redis://redis:6379/0
       JOBS_DIR: /jobs
-      JOB_TTL_SECONDS: "3600"
+      JOB_TTL_SECONDS: ${JOB_TTL_SECONDS:-3600}
     volumes: [./runtime/jobs:/jobs]
+    depends_on:
+      jobs-init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      pocketbase: { condition: service_healthy }
     deploy:
       resources:
         limits: { cpus: "1.0", memory: 1536M }
   redis:
     image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   pocketbase:
-    image: spectado/pocketbase:0.26.7
+    build: ./pocketbase
+    environment:
+      POCKETBASE_SUPERUSER_EMAIL: ${POCKETBASE_SUPERUSER_EMAIL:?Set a PocketBase superuser email}
+      POCKETBASE_SUPERUSER_PASSWORD: ${POCKETBASE_SUPERUSER_PASSWORD:?Set a PocketBase superuser password}
+    ports: ["127.0.0.1:8090:8090"]
     volumes:
       - pocketbase_data:/pb_data
       - ./pocketbase/pb_migrations:/pb_migrations:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8090/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 volumes:
   pocketbase_data:
 networks:

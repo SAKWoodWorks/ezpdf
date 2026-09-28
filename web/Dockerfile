@@ -1,6 +1,6 @@
 FROM node:24-bookworm-slim
 
-RUN groupadd --system app && useradd --system --gid app --create-home app
+RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --create-home app
 WORKDIR /app
 RUN chown app:app /app
 USER app
