@@ -6,7 +6,7 @@
 
 **Architecture:** The Next.js web service owns authentication checks, upload/download endpoints, and job records in PocketBase. A Python worker consumes Redis jobs and reads/writes only `runtime/jobs/<uuid>` through a shared bind mount, using native PDF tools. Cleanup removes each job directory after download or 60-minute expiry.
 
-**Tech Stack:** Next.js + TypeScript, PocketBase, Redis + BullMQ, Python 3.12 + RQ, qpdf, Ghostscript, Poppler, img2pdf, Pillow, Docker Compose, Vitest, pytest.
+**Tech Stack:** Next.js + TypeScript, PocketBase, Redis list queue, Python 3.12, qpdf, Ghostscript, Poppler, img2pdf, Pillow, Docker Compose, Vitest, pytest.
 
 **Spec:** `docs/superpowers/specs/2026-09-22-local-pdf-manager-design.md`
 
@@ -282,7 +282,7 @@ Expected: FAIL because cleanup and queue consumer modules do not exist.
 
 - [ ] **Step 3: Implement queue worker and cleanup**
 
-Use RQ with one worker process listening to `pdf-jobs`. Before processing, update the record to `processing`; on success set `ready` and `outputName`; on a handled failure set `failed` and the stable error code. `cleanup.py` must recursively remove only directories whose names match a job ID supplied by PocketBase metadata, never arbitrary paths. It deletes folders after `downloaded` or expiry and updates the record to `expired`. On startup, mark stale `processing` jobs failed, then clean their folders.
+Use a Redis list named `pdf-jobs`, with the web service appending UTF-8 JSON payloads through `LPUSH` and one Python worker blocking on `BRPOP`. Before processing, update the record to `processing`; on success set `ready` and `outputName`; on a handled failure set `failed` and the stable error code. `cleanup.py` must recursively remove only directories whose names match a job ID supplied by PocketBase metadata, never arbitrary paths. It deletes folders after `downloaded` or expiry and updates the record to `expired`. On startup, mark stale `processing` jobs failed, then clean their folders.
 
 - [ ] **Step 4: Run all worker tests**
 
