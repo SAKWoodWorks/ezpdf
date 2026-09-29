@@ -15,36 +15,73 @@ function fakeObjectUrls() {
   return { createObjectURL, revokeObjectURL, revoked };
 }
 
-it("previews selected image files from the local device", () => {
+function png(name: string) {
+  return new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], name, { type: "image/png" });
+}
+
+function choose(files: File[]) {
+  fireEvent.change(screen.getByLabelText("Choose files"), { target: { files } });
+}
+
+it("sizes input previews at 200x100", () => {
+  fakeObjectUrls();
+  render(<JobUploader operation="image_to_pdf" />);
+  choose([png("a.png")]);
+  const image = screen.getByAltText("a.png preview");
+  expect(image).toHaveAttribute("width", "200");
+  expect(image).toHaveAttribute("height", "100");
+});
+
+it("appends a later selection instead of replacing it", () => {
+  fakeObjectUrls();
+  render(<JobUploader operation="image_to_pdf" />);
+  choose([png("a.png")]);
+  choose([png("b.png")]);
+  expect(screen.getByAltText("a.png preview")).toBeInTheDocument();
+  expect(screen.getByAltText("b.png preview")).toBeInTheDocument();
+  expect(screen.getByText("2 files selected")).toBeInTheDocument();
+});
+
+it("keeps one row when the same file is picked again", () => {
   const urls = fakeObjectUrls();
   render(<JobUploader operation="image_to_pdf" />);
-  fireEvent.change(screen.getByLabelText("Choose files"), { target: { files: [
-    new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], "a.png", { type: "image/png" }),
-    new File([new Uint8Array([255, 216, 255])], "b.jpg", { type: "image/jpeg" }),
-  ] } });
-  expect(screen.getByAltText("a.png preview")).toHaveAttribute("src", "blob:preview-1");
-  expect(screen.getByAltText("b.jpg preview")).toHaveAttribute("src", "blob:preview-2");
-  expect(urls.createObjectURL).toHaveBeenCalledTimes(2);
+  choose([png("a.png")]);
+  choose([png("a.png")]);
+  expect(screen.getAllByAltText("a.png preview")).toHaveLength(1);
+  expect(urls.revoked).toEqual([]);
+});
+
+it("stacks every selected file as its own preview row", () => {
+  fakeObjectUrls();
+  render(<JobUploader operation="image_to_pdf" />);
+  choose([png("a.png"), png("b.png"), png("c.png")]);
+  for (const name of ["a.png", "b.png", "c.png"]) {
+    expect(screen.getByAltText(`${name} preview`)).toBeInTheDocument();
+  }
+});
+
+it("replaces the single file for one-file tools", () => {
+  fakeObjectUrls();
+  render(<JobUploader operation="pdf_to_image" />);
+  choose([new File(["%PDF-1.7 first"], "x.pdf", { type: "application/pdf" })]);
+  choose([new File(["%PDF-1.7 second"], "y.pdf", { type: "application/pdf" })]);
+  expect(screen.getByText("y.pdf")).toBeInTheDocument();
+  expect(screen.queryByText("x.pdf")).not.toBeInTheDocument();
 });
 
 it("does not preview pdf inputs", () => {
   fakeObjectUrls();
   render(<JobUploader operation="merge_pdf" />);
-  fireEvent.change(screen.getByLabelText("Choose files"), { target: { files: [
-    new File(["%PDF-1.7"], "doc.pdf", { type: "application/pdf" }),
-  ] } });
+  choose([new File(["%PDF-1.7"], "doc.pdf", { type: "application/pdf" })]);
   expect(screen.queryByAltText("doc.pdf preview")).not.toBeInTheDocument();
 });
 
-it("revokes old preview urls when the selection changes", () => {
+it("revokes removed rows' preview urls", () => {
   const urls = fakeObjectUrls();
   render(<JobUploader operation="image_to_pdf" />);
-  fireEvent.change(screen.getByLabelText("Choose files"), { target: { files: [
-    new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], "a.png", { type: "image/png" }),
-  ] } });
-  fireEvent.change(screen.getByLabelText("Choose files"), { target: { files: [
-    new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], "b.png", { type: "image/png" }),
-  ] } });
-  expect(urls.revoked).toEqual(["blob:preview-1"]);
-  expect(screen.getByAltText("b.png preview")).toHaveAttribute("src", "blob:preview-2");
+  choose([png("a.png"), png("b.png")]);
+  fireEvent.click(screen.getByRole("button", { name: "Remove a.png" }));
+  expect(screen.getByAltText("b.png preview")).toBeInTheDocument();
+  expect(screen.queryByAltText("a.png preview")).not.toBeInTheDocument();
+  expect(urls.revoked).toEqual(["blob:preview-1", "blob:preview-2"]);
 });

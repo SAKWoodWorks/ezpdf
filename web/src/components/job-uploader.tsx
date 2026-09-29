@@ -8,6 +8,10 @@ function isPreviewable(file: File): boolean {
   return /\.(png|jpe?g)$/i.test(file.name) && typeof URL.createObjectURL === "function";
 }
 
+function fileKey(file: File): string {
+  return `${file.name}:${file.size}`;
+}
+
 export function JobUploader({ operation }: { operation: Operation }) {
   const tool = TOOLS[operation];
   const [files, setFiles] = useState<File[]>([]);
@@ -22,10 +26,20 @@ export function JobUploader({ operation }: { operation: Operation }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const uploading = useRef(false);
 
-  function changeFiles(next: File[]) {
-    if (uploading.current) return;
+  function replaceSelection(next: File[]) {
     setPendingId(null); setError(""); setFiles(next);
     setPreviews(next.map(file => isPreviewable(file) ? URL.createObjectURL(file) : null));
+  }
+
+  function appendFiles(incoming: File[]) {
+    if (uploading.current || !incoming.length) return;
+    if (!tool.multiple) { replaceSelection([incoming[incoming.length - 1]]); return; }
+    const merged = [...files];
+    for (const file of incoming) {
+      if (!merged.some(existing => fileKey(existing) === fileKey(file))) merged.push(file);
+    }
+    if (merged.length === files.length) { setPendingId(null); setError(""); return; }
+    replaceSelection(merged);
   }
 
   useEffect(() => () => {
@@ -35,7 +49,7 @@ export function JobUploader({ operation }: { operation: Operation }) {
   function moveFile(index: number, offset: number) {
     const next = [...files];
     [next[index], next[index + offset]] = [next[index + offset], next[index]];
-    changeFiles(next);
+    replaceSelection(next);
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,14 +107,14 @@ export function JobUploader({ operation }: { operation: Operation }) {
   return <form onSubmit={submit} className="upload-form">
     <fieldset disabled={busy}>
       <legend className="sr-only">Upload and options</legend>
-      <div className="upload-surface" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); changeFiles(Array.from(event.dataTransfer.files)); }}>
+      <div className="upload-surface" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); appendFiles(Array.from(event.dataTransfer.files)); }}>
         <svg aria-hidden="true" width="44" height="50" viewBox="0 0 44 50" fill="none"><path d="M8 2h20l9 9v36H8V2Z" stroke="currentColor" strokeWidth="2"/><path d="M28 2v10h9M15 29l7-7 7 7M22 22v16" stroke="currentColor" strokeWidth="2"/></svg>
-        <h2>Add your documents</h2><p>Drop files here, or choose them from your device.</p>
+        <h2>Add your documents</h2><p>Drop files here, or choose them from your device. Picking more files adds them.</p>
         <label className="file-label" htmlFor={`files-${operation}`}>Choose files</label>
-        <input id={`files-${operation}`} className="file-input" type="file" accept={tool.accept} multiple={tool.multiple} aria-describedby="file-help" onChange={event => { changeFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
+        <input id={`files-${operation}`} className="file-input" type="file" accept={tool.accept} multiple={tool.multiple} aria-describedby="file-help" onChange={event => { appendFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
         <p id="file-help" className="field-help">{tool.input}. Up to 200 MB total.</p>
       </div>
-      {files.length > 0 && <div className="selected-files"><h3>{files.length} {files.length === 1 ? "file" : "files"} selected</h3>{tool.multiple && <p className="field-help">Files are processed in this order.</p>}<ol>{files.map((file, index) => <li key={`${index}-${file.name}`}>{previews[index] && <img className="file-thumb" src={previews[index]!} alt={`${file.name} preview`} width={96} height={96} />}<span className="file-name">{file.name}<small>{(file.size / 1024).toFixed(1)} KB</small></span><div className="file-actions">{tool.multiple && <><button type="button" className="icon-button" aria-label={`Move ${file.name} up`} disabled={index === 0} onClick={() => moveFile(index, -1)}>↑</button><button type="button" className="icon-button" aria-label={`Move ${file.name} down`} disabled={index === files.length - 1} onClick={() => moveFile(index, 1)}>↓</button></>}<button type="button" className="text-button" aria-label={`Remove ${file.name}`} onClick={() => changeFiles(files.filter((_, position) => position !== index))}>Remove</button></div></li>)}</ol></div>}
+      {files.length > 0 && <div className="selected-files"><h3>{files.length} {files.length === 1 ? "file" : "files"} selected</h3>{tool.multiple && <p className="field-help">Files are processed in this order.</p>}<ol>{files.map((file, index) => <li key={`${index}-${file.name}`}>{previews[index] && <img className="file-thumb" src={previews[index]!} alt={`${file.name} preview`} width={200} height={100} />}<span className="file-name">{file.name}<small>{(file.size / 1024).toFixed(1)} KB</small></span><div className="file-actions">{tool.multiple && <><button type="button" className="icon-button" aria-label={`Move ${file.name} up`} disabled={index === 0} onClick={() => moveFile(index, -1)}>↑</button><button type="button" className="icon-button" aria-label={`Move ${file.name} down`} disabled={index === files.length - 1} onClick={() => moveFile(index, 1)}>↓</button></>}<button type="button" className="text-button" aria-label={`Remove ${file.name}`} onClick={() => replaceSelection(files.filter((_, position) => position !== index))}>Remove</button></div></li>)}</ol></div>}
       {operation === "split_pdf" && <div className="tool-option"><label htmlFor="pageRange">Pages to extract</label><input id="pageRange" value={pageRange} onChange={event => { setPendingId(null); setPageRange(event.target.value); }} placeholder="1-3,5" required maxLength={1000} aria-describedby="pages-help" /><p id="pages-help" className="field-help">Use commas for separate pages and a hyphen for a range, such as 1-3,5.</p></div>}
       {operation === "pdf_to_image" && <div className="tool-option"><label htmlFor="imageFormat">Image format</label><select id="imageFormat" value={imageFormat} onChange={event => { setPendingId(null); setImageFormat(event.target.value); }}><option value="png">PNG</option><option value="jpg">JPG</option></select></div>}
       {operation === "compress_pdf" && <div className="tool-option"><label htmlFor="preset">Compression</label><select id="preset" value={preset} onChange={event => { setPendingId(null); setPreset(event.target.value); }}><option value="balanced">Balanced</option><option value="smallest">Smallest</option></select><p className="field-help">Balanced preserves more detail. Smallest favors file size over image quality.</p></div>}
