@@ -88,7 +88,7 @@ export function JobStatus({ initialJob }: { initialJob: PublicJob }) {
     {job.status === "ready" && pages > 0 && (
       <div className="thumb-strip" aria-label="Page previews">
         {Array.from({ length: Math.min(pages, 50) }, (_, index) => (
-          <img key={index + 1} src={`/api/jobs/${job.id}/thumbnails/${index + 1}`} alt={`Page ${index + 1} preview`} loading="lazy" width={120} height={120} />
+          <img key={index + 1} src={`/api/jobs/${job.id}/thumbnails/${index + 1}`} alt={`Page ${index + 1} preview`} loading="lazy" width={240} height={240} />
         ))}
       </div>
     )}
