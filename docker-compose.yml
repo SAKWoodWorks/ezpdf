@@ -14,7 +14,7 @@ services:
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-209715200}
       JOB_TTL_SECONDS: ${JOB_TTL_SECONDS:-3600}
     volumes: [./runtime/jobs:/jobs]
-    ports: ["127.0.0.1:8007:3000"]
+    ports: ["127.0.0.1:${WEB_PORT:-8007}:3000"]
     networks: [default, backend]
     depends_on:
       jobs-init: { condition: service_completed_successfully }
@@ -52,7 +52,7 @@ services:
     environment:
       POCKETBASE_SUPERUSER_EMAIL: ${POCKETBASE_SUPERUSER_EMAIL:?Set a PocketBase superuser email}
       POCKETBASE_SUPERUSER_PASSWORD: ${POCKETBASE_SUPERUSER_PASSWORD:?Set a PocketBase superuser password}
-    ports: ["127.0.0.1:8009:8090"]
+    ports: ["127.0.0.1:${POCKETBASE_PORT:-8009}:8090"]
     networks: [default, backend]
     volumes:
       - pocketbase_data:/pb_data

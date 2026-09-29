@@ -48,7 +48,7 @@ Browser → Next.js web → Redis queue → Python worker
 - **Job storage**: a shared host bind mount at `runtime/jobs`, mounted as
   `/jobs` in web and worker containers.
 
-Only web (`127.0.0.1:3000`) and PocketBase (`127.0.0.1:8090`) publish host
+Only web (`127.0.0.1:${WEB_PORT:-8007}`) and PocketBase (`127.0.0.1:${POCKETBASE_PORT:-8009}`) publish host
 ports. Redis and the worker remain on an internal Docker network.
 
 ## Prerequisites
@@ -56,7 +56,7 @@ ports. Redis and the worker remain on an internal Docker network.
 - Docker Desktop with Linux containers and Docker Compose v2 (or Docker Engine
   plus Compose v2 on Linux)
 - PowerShell 5.1+ or PowerShell 7 for the smoke test
-- Free loopback ports 3000 and 8090
+- Free loopback ports (web 8007, PocketBase 8009 by default)
 
 ## Local setup
 
@@ -76,7 +76,7 @@ docker compose exec pocketbase sh -c 'pocketbase superuser upsert "$POCKETBASE_S
 ```
 
 Create a normal application account at `http://localhost:3000/register`.
-PocketBase administration is available at `http://localhost:8090/_/`.
+PocketBase administration is available at `http://localhost:8009/_/`.
 
 See `README.md` for the detailed operational instructions.
 

@@ -11,7 +11,8 @@ Cloudflare R2 storage is intentionally deferred.
 - Docker Desktop with Linux containers and Docker Compose v2, or Docker Engine
   with Compose v2 on Linux. Allow Docker access to this project directory.
 - Windows PowerShell 5.1 or PowerShell 7 for the smoke script.
-- Free loopback ports 3000 and 8090; internet access during image builds.
+- Free loopback ports (web defaults to 8007, PocketBase to 8009; both configurable
+  via `WEB_PORT`/`POCKETBASE_PORT` in `.env`); internet access during image builds.
 
 ## First local start
 
@@ -34,7 +35,7 @@ docker compose exec pocketbase sh -c 'pocketbase superuser upsert "$POCKETBASE_S
 The second command creates the first PocketBase superuser using the values
 already present inside the container. Run it again only when intentionally
 synchronizing those credentials. The worker retries until setup is complete.
-Open <http://localhost:8090/_/> to sign in to the administrator dashboard.
+Open <http://localhost:8009/_/> to sign in to the administrator dashboard.
 Both migrations run automatically at startup and create the `jobs` collection
 with owner-scoped reads and server-only writes. Do not enable public job writes.
 

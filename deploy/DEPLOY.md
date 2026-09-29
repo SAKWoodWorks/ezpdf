@@ -36,7 +36,9 @@ ufw allow 443/tcp
 ufw enable
 ```
 
-Ports 3000 and 8090 stay bound to `127.0.0.1` and must not be opened.
+The web app and PocketBase bind to `127.0.0.1` on `WEB_PORT` (default 8007) and
+`POCKETBASE_PORT` (default 8009, override in `.env` if the port is taken); never
+open them in the firewall.
 
 ## 5. Clone the repository and configure
 
@@ -80,14 +82,14 @@ docker compose logs --tail 50 web worker caddy
 
 ## 8. Administer PocketBase without exposing it
 
-Port 8090 is loopback-only on the droplet. Reach the admin dashboard through
+PocketBase is loopback-only on the droplet. Reach the admin dashboard through
 an SSH tunnel from your own machine:
 
 ```bash
-ssh -L 8090:127.0.0.1:8090 root@YOUR_DROPLET_IP
+ssh -L 8009:127.0.0.1:8009 root@YOUR_DROPLET_IP   # use your POCKETBASE_PORT
 ```
 
-Then open `http://localhost:8090/_/` locally.
+Then open `http://localhost:8009/_/` locally.
 
 ## 9. Updates
 
