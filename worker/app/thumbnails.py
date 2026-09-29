@@ -8,7 +8,7 @@ from zipfile import ZipFile
 from PIL import Image
 
 MAX_THUMBNAILS = 50
-THUMB_EDGE = 240
+THUMB_EDGE = 800
 PDF_OPERATIONS_SUFFIX = ".pdf"
 
 

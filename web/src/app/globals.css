@@ -95,15 +95,14 @@ input:not([type="file"]),select { min-height:46px; padding:10px 12px; width:100%
 
 .thumb-strip {
   display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 4px 0;
+  flex-direction: column;
+  gap: 10px;
 }
 .thumb-strip img {
   border-radius: 6px;
   border: 1px solid var(--border, #d4d4d8);
-  object-fit: cover;
-  flex: 0 0 auto;
+  width: 100%;
+  height: auto;
   background: #fafafa;
 }
 

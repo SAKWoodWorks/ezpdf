@@ -4,7 +4,11 @@ from zipfile import ZipFile
 from PIL import Image
 
 from app.processor import process_image_to_pdf, process_merge, process_pdf_to_images, process_split
-from app.thumbnails import MAX_THUMBNAILS, thumbnail_count, generate_thumbnails
+from app.thumbnails import MAX_THUMBNAILS, THUMB_EDGE, thumbnail_count, generate_thumbnails
+
+
+def test_thumbnail_render_size_matches_card_width_display():
+    assert THUMB_EDGE == 800
 
 
 def test_pdf_output_gets_one_jpeg_thumbnail_per_page(tmp_path: Path):
@@ -18,7 +22,7 @@ def test_pdf_output_gets_one_jpeg_thumbnail_per_page(tmp_path: Path):
     for thumb in thumbs:
         with Image.open(thumb) as image:
             assert image.format == "JPEG"
-            assert max(image.size) <= 240
+            assert max(image.size) <= THUMB_EDGE
 
 
 def test_zip_of_images_gets_thumbnails_without_rerendering(tmp_path: Path):
