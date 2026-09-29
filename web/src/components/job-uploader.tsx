@@ -31,7 +31,15 @@ export function JobUploader({ operation }: { operation: Operation }) {
   const [error, setError] = useState("");
   const [job, setJob] = useState<PublicJob | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
   const uploading = useRef(false);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setLightbox(null); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [lightbox]);
 
   function previewUrl(file: File): string | null {
     const key = fileKey(file);
@@ -142,7 +150,8 @@ export function JobUploader({ operation }: { operation: Operation }) {
   }
 
   if (job) return <section aria-label="Your job"><JobStatus initialJob={job} /><button className="button secondary" onClick={() => { setJob(null); setFiles([]); setError(""); }}>Start another job</button></section>;
-  return <form onSubmit={submit} className="upload-form">
+  return <>
+  <form onSubmit={submit} className="upload-form">
     <fieldset disabled={busy}>
       <legend className="sr-only">Upload and options</legend>
       <div className="upload-surface" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); appendFiles(Array.from(event.dataTransfer.files)); }}>
@@ -152,12 +161,19 @@ export function JobUploader({ operation }: { operation: Operation }) {
         <input id={`files-${operation}`} className="file-input" type="file" accept={tool.accept} multiple={tool.multiple} aria-describedby="file-help" onChange={event => { appendFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
         <p id="file-help" className="field-help">{tool.input}. Up to 200 MB total.</p>
       </div>
-      {files.length > 0 && <div className="selected-files"><h3>{files.length} {files.length === 1 ? "file" : "files"} selected</h3>{tool.multiple && <p className="field-help">Files are processed in this order.</p>}<ol>{files.map((file, index) => <li key={`${index}-${file.name}`}>{previews[fileKey(file)] && <img className="file-thumb" src={previews[fileKey(file)]} alt={`${file.name} preview`} width={200} height={280} />}<span className="file-name">{file.name}<small>{(file.size / 1024).toFixed(1)} KB</small></span><div className="file-actions">{tool.multiple && <><button type="button" className="icon-button" aria-label={`Move ${file.name} up`} disabled={index === 0} onClick={() => moveFile(index, -1)}>↑</button><button type="button" className="icon-button" aria-label={`Move ${file.name} down`} disabled={index === files.length - 1} onClick={() => moveFile(index, 1)}>↓</button></>}<button type="button" className="text-button" aria-label={`Remove ${file.name}`} onClick={() => replaceSelection(files.filter((_, position) => position !== index))}>Remove</button></div></li>)}</ol></div>}
+      {files.length > 0 && <div className="selected-files"><h3>{files.length} {files.length === 1 ? "file" : "files"} selected</h3>{tool.multiple && <p className="field-help">Files are processed in this order.</p>}<ol>{files.map((file, index) => <li key={`${index}-${file.name}`}>{previews[fileKey(file)] && <button type="button" className="thumb-button" aria-label={`Open ${file.name} preview`} onClick={() => setLightbox({ url: previews[fileKey(file)], name: file.name })}><img className="file-thumb" src={previews[fileKey(file)]} alt={`${file.name} preview`} width={200} height={280} /></button>}<span className="file-name">{file.name}<small>{(file.size / 1024).toFixed(1)} KB</small></span><div className="file-actions">{tool.multiple && <><button type="button" className="icon-button" aria-label={`Move ${file.name} up`} disabled={index === 0} onClick={() => moveFile(index, -1)}>↑</button><button type="button" className="icon-button" aria-label={`Move ${file.name} down`} disabled={index === files.length - 1} onClick={() => moveFile(index, 1)}>↓</button></>}<button type="button" className="text-button" aria-label={`Remove ${file.name}`} onClick={() => replaceSelection(files.filter((_, position) => position !== index))}>Remove</button></div></li>)}</ol></div>}
       {operation === "split_pdf" && <div className="tool-option"><label htmlFor="pageRange">Pages to extract</label><input id="pageRange" value={pageRange} onChange={event => { setPendingId(null); setPageRange(event.target.value); }} placeholder="1-3,5" required maxLength={1000} aria-describedby="pages-help" /><p id="pages-help" className="field-help">Use commas for separate pages and a hyphen for a range, such as 1-3,5.</p></div>}
       {operation === "pdf_to_image" && <div className="tool-option"><label htmlFor="imageFormat">Image format</label><select id="imageFormat" value={imageFormat} onChange={event => { setPendingId(null); setImageFormat(event.target.value); }}><option value="png">PNG</option><option value="jpg">JPG</option></select></div>}
       {operation === "compress_pdf" && <div className="tool-option"><label htmlFor="preset">Compression</label><select id="preset" value={preset} onChange={event => { setPendingId(null); setPreset(event.target.value); }}><option value="balanced">Balanced</option><option value="smallest">Smallest</option></select><p className="field-help">Balanced preserves more detail. Smallest favors file size over image quality.</p></div>}
     </fieldset>
     {error && <p role="alert" className="error-message">{error}</p>}
     <div className="submit-row"><button className="button primary" disabled={busy || !files.length}>{busy ? stage : pendingId ? "Retry upload" : tool.title}</button><p role="status">{busy ? "Keep this page open while your files upload." : "Files are available for a limited time."}</p></div>
-  </form>;
+  </form>
+  {lightbox && (
+    <div className="lightbox" role="dialog" aria-modal="true" onClick={() => setLightbox(null)}>
+      <img src={lightbox.url} alt={`${lightbox.name} full page`} />
+      <button type="button" className="lightbox-close" aria-label="Close preview" onClick={() => setLightbox(null)}>×</button>
+    </div>
+  )}
+  </>;
 }

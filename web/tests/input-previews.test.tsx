@@ -87,3 +87,27 @@ it("releases every preview url when the uploader unmounts", async () => {
   await Promise.resolve();
   expect(urls.revoked).toEqual(["blob:preview-1", "blob:preview-2"]);
 });
+
+it("opens a full page popup when a preview is clicked and closes it", async () => {
+  const urls = fakeObjectUrls();
+  render(<JobUploader operation="image_to_pdf" />);
+  choose([png("a.png")]);
+  expect(screen.queryByAltText("a.png full page")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByAltText("a.png preview"));
+  const full = screen.getByAltText("a.png full page");
+  expect(full).toHaveAttribute("src", "blob:preview-1");
+  expect(screen.getByRole("button", { name: "Close preview" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Close preview" }));
+  expect(screen.queryByAltText("a.png full page")).not.toBeInTheDocument();
+  expect(urls.revoked).toEqual([]);
+});
+
+it("closes the popup with the Escape key", () => {
+  fakeObjectUrls();
+  render(<JobUploader operation="image_to_pdf" />);
+  choose([png("a.png")]);
+  fireEvent.click(screen.getByAltText("a.png preview"));
+  expect(screen.getByAltText("a.png full page")).toBeInTheDocument();
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(screen.queryByAltText("a.png full page")).not.toBeInTheDocument();
+});
