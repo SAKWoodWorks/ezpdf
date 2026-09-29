@@ -57,7 +57,12 @@ fieldset { border:0; padding:0; margin:0; min-width:0; }
 .text-button { border:0; background:transparent; color:var(--blue); padding:8px; text-decoration:underline; text-underline-offset:3px; }
 .selected-files { margin-top:26px; }
 .selected-files ol { margin:14px 0 0; padding-left:24px; }
-.selected-files li { border-top:1px solid var(--line); padding:13px 0 13px 4px; }
+.selected-files li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
 .selected-files li::marker { color:var(--muted); font-size:12px; }
 .file-name { display:inline-block; max-width:calc(100% - 190px); vertical-align:middle; overflow-wrap:anywhere; font-size:14px; }
 .file-name small { display:block; color:var(--muted); font-size:12px; }
