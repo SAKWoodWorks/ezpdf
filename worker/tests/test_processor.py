@@ -187,7 +187,7 @@ def test_split_writes_a_deterministic_archive(one_page_pdf: Path, tmp_path: Path
 
 
 def test_pdf_to_images_writes_a_zip(one_page_pdf: Path, tmp_path: Path):
-    output = process_pdf_to_images(one_page_pdf, tmp_path / "images", "png")
+    output = process_pdf_to_images([one_page_pdf], tmp_path / "images", "png")
 
     assert output.name == "result.zip"
     with ZipFile(output) as archive:
@@ -207,3 +207,15 @@ def test_input_limit_matches_the_web_upload_contract():
     from app.config import MAX_INPUT_BYTES
 
     assert MAX_INPUT_BYTES == 200 * 1024 * 1024
+
+
+def test_pdf_to_images_accepts_multiple_documents(tmp_path: Path):
+    first = tmp_path / "first.pdf"
+    second = tmp_path / "second.pdf"
+    Image.new("RGB", (32, 32), "white").save(first, "PDF", save_all=True, append_images=[Image.new("RGB", (32, 32), "gray")])
+    Image.new("RGB", (32, 32), "red").save(second, "PDF")
+
+    output = process_pdf_to_images([first, second], tmp_path / "images", "png")
+
+    with ZipFile(output) as archive:
+        assert archive.namelist() == ["page-0001.png", "page-0002.png", "page-0003.png"]

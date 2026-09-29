@@ -16,7 +16,7 @@ it("renders each tool with its supported file picker", async () => {
     ["merge_pdf", "Merge PDF", ".pdf,application/pdf", true],
     ["split_pdf", "Split PDF", ".pdf,application/pdf", false],
     ["compress_pdf", "Compress PDF", ".pdf,application/pdf", false],
-    ["pdf_to_image", "PDF to image", ".pdf,application/pdf", false],
+    ["pdf_to_image", "PDF to image", ".pdf,application/pdf", true],
     ["image_to_pdf", "Image to PDF", ".png,.jpg,.jpeg,image/png,image/jpeg", true],
   ] as const) {
     render(await ToolPage({ params: Promise.resolve({ operation }) }));

@@ -27,7 +27,7 @@ export function validateCreateJob(value: unknown): CreateJobInput {
   const { operation, inputNames, options = {} } = value as Record<string, unknown>;
   if (!OPERATIONS.includes(operation as Operation) || !Array.isArray(inputNames) || !inputNames.length || inputNames.length > 100) throw new ApiError("INVALID_INPUT");
   const op = operation as Operation;
-  if ((op === "merge_pdf" && inputNames.length < 2) || (!["merge_pdf", "image_to_pdf"].includes(op) && inputNames.length !== 1)) throw new ApiError("INVALID_INPUT");
+  if ((op === "merge_pdf" && inputNames.length < 2) || (["split_pdf", "compress_pdf"].includes(op) && inputNames.length !== 1)) throw new ApiError("INVALID_INPUT");
   for (const name of inputNames) {
     assertSafeName(name);
     if (!(op === "image_to_pdf" ? /\.(png|jpe?g)$/i : /\.pdf$/i).test(name)) throw new ApiError("UNSUPPORTED_TYPE");

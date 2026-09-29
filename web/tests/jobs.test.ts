@@ -31,6 +31,11 @@ describe("job boundaries", () => {
       .toEqual({ operation: "pdf_to_image", inputNames: ["ไทย.pdf"], options: { imageFormat: "jpg" } });
   });
 
+  it("accepts several pdf files for pdf_to_image", () => {
+    expect(validateCreateJob({ operation: "pdf_to_image", inputNames: ["a.pdf", "b.pdf"], options: {} }))
+      .toEqual({ operation: "pdf_to_image", inputNames: ["a.pdf", "b.pdf"], options: {} });
+  });
+
   it("creates trusted owner, UUID, uploading state, and one hour expiry", async () => {
     const writes: Record<string, unknown>[] = [];
     vi.stubEnv("POCKETBASE_SUPERUSER_EMAIL", "admin@example.test");

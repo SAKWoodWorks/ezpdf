@@ -64,7 +64,7 @@ it("stacks every selected file as its own preview row", () => {
 
 it("replaces the single file for one-file tools", () => {
   fakeObjectUrls();
-  render(<JobUploader operation="pdf_to_image" />);
+  render(<JobUploader operation="compress_pdf" />);
   choose([new File(["%PDF-1.7 first"], "x.pdf", { type: "application/pdf" })]);
   choose([new File(["%PDF-1.7 second"], "y.pdf", { type: "application/pdf" })]);
   expect(screen.getByText("y.pdf")).toBeInTheDocument();

@@ -112,20 +112,26 @@ def process_image_to_pdf(inputs: list[Path], output: Path) -> None:
     run_tool(["img2pdf", "--output", str(output), *(str(item) for item in inputs)])
 
 
-def process_pdf_to_images(input_pdf: Path, output_dir: Path, image_format: str) -> Path:
+def process_pdf_to_images(inputs: list[Path], output_dir: Path, image_format: str) -> Path:
     normalized_format = _normalize_image_format(image_format)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    prefix = output_dir / "page"
-    run_tool(["pdftoppm", f"-{normalized_format}", str(input_pdf), str(prefix)])
-
     extension = "jpg" if normalized_format == "jpeg" else normalized_format
-    images = sorted(output_dir.glob(f"page-*.{extension}"))
-    if not images:
-        raise RuntimeError("pdftoppm produced no image files")
-    output = output_dir / "result.zip"
-    _write_zip(output, images, "page", extension)
-    _remove_files(images)
-    return output
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rendered: list[Path] = []
+    try:
+        for index, input_pdf in enumerate(inputs, start=1):
+            prefix = output_dir / f"source-{index:04d}"
+            run_tool(["pdftoppm", f"-{normalized_format}", str(input_pdf), str(prefix)])
+            rendered.extend(sorted(
+                output_dir.glob(f"source-{index:04d}-*.{extension}"),
+                key=lambda item: int(item.stem.rsplit("-", 1)[-1]),
+            ))
+        if not rendered:
+            raise RuntimeError("pdftoppm produced no image files")
+        output = output_dir / "result.zip"
+        _write_zip(output, rendered, "page", extension)
+        return output
+    finally:
+        _remove_files(rendered)
 
 
 def process_merge(inputs: list[Path], output: Path) -> None:
@@ -212,7 +218,7 @@ def process_job(job: JobPayload, jobs_dir: Path) -> ProcessingResult:
             process_image_to_pdf(inputs, output)
         elif job.operation is Operation.PDF_TO_IMAGE:
             image_format = str(job.options.get("imageFormat", "png"))
-            output = process_pdf_to_images(inputs[0], output_dir, image_format)
+            output = process_pdf_to_images(inputs, output_dir, image_format)
         elif job.operation is Operation.MERGE_PDF:
             output = output_dir / "result.pdf"
             process_merge(inputs, output)

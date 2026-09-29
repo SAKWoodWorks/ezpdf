@@ -28,7 +28,7 @@ def test_pdf_output_gets_one_jpeg_thumbnail_per_page(tmp_path: Path):
 def test_zip_of_images_gets_thumbnails_without_rerendering(tmp_path: Path):
     output_dir = tmp_path / "output"
     output_dir.mkdir()
-    result = process_pdf_to_images(_one_page_pdf(tmp_path), output_dir, "png")
+    result = process_pdf_to_images([_one_page_pdf(tmp_path)], output_dir, "png")
 
     generate_thumbnails(result, output_dir)
 
