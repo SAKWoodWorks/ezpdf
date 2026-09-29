@@ -106,3 +106,16 @@ input:not([type="file"]),select { min-height:46px; padding:10px 12px; width:100%
   flex: 0 0 auto;
   background: #fafafa;
 }
+
+.selected-files li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.file-thumb {
+  border-radius: 6px;
+  border: 1px solid var(--border, #d4d4d8);
+  object-fit: cover;
+  background: #fafafa;
+  flex: 0 0 auto;
+}
