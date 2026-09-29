@@ -69,8 +69,9 @@ fieldset { border:0; padding:0; margin:0; min-width:0; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  width: 128px;
+  gap: 10px;
+  flex: 0 0 auto;
+  width: min(1000px, 100%);
 }
 .file-name { text-align:center; overflow-wrap:anywhere; font-size:13px; line-height:1.3; }
 .file-name small { display:block; color:var(--muted); font-size:11px; }
