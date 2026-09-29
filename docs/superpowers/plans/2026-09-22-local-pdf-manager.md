@@ -505,6 +505,43 @@ git add worker/app/worker.py worker/tests/test_worker.py
 git commit -m "feat: republish lost queue messages for queued jobs"
 ```
 
+### Task 9: Result page thumbnails for every tool
+
+**Files:**
+- Create: `worker/app/thumbnails.py`, `worker/tests/test_thumbnails.py`
+- Modify: `worker/app/processor.py`, `web/src/lib/lifecycle.ts`,
+  `web/src/components/job-status.tsx`
+- Create: `web/src/app/api/jobs/[id]/thumbnails/route.ts`,
+  `web/src/app/api/jobs/[id]/thumbnails/[page]/route.ts`
+
+**Interfaces:**
+- Produces up to 50 JPEG previews (240px edge) in `<job>/output/thumbs/thumb-<n>.jpg`
+  for PDF outputs via pdftoppm, for image ZIPs via Pillow, and for split PDF
+  parts via pdftoppm.
+- Produces owner-checked `GET /api/jobs/:id/thumbnails` returning `{ pages }` and
+  `GET /api/jobs/:id/thumbnails/:page` returning a JPEG, both gated to ready jobs.
+- Produces a thumbnail strip in the job card once a job is ready.
+
+- [x] **Step 1: Write failing worker tests** covering PDF outputs, image ZIPs,
+  split parts, the 50-page cap, and the guarantee that thumbnail failures never
+  fail a finished job.
+- [x] **Step 2: Implement `generate_thumbnails` and call it best-effort from
+  `process_job`.**
+- [x] **Step 3: Write failing web tests** for the helper functions and both
+  routes (session required, owner-scoped, ready-only, page bounds 1-50,
+  no-store JPEG).
+- [x] **Step 4: Implement the helpers and routes; add the strip to `JobStatus`.**
+- [x] **Step 5: Verify**: worker pytest 82 passed; web suite 88 passed; smoke
+  test PASS; live three-page job returned `{ pages: 3 }` and a 240x180 JPEG
+  for page 1.
+
+- [x] **Step 6: Commit**
+
+```bash
+git add worker/app worker/tests web/src web/tests
+git commit -m "feat: show page thumbnails for finished jobs"
+```
+
 ## Plan self-review
 
 - Spec coverage: Tasks 1–7 cover all five PDF tools, authentication, PocketBase metadata, Redis queue, temporary files, expiry, worker restrictions, security validation, UI, tests, Docker Compose, and future R2 isolation.
