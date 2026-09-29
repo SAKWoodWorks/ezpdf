@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { JobUploader } from "@/components/job-uploader";
 
+vi.mock("@/lib/pdf-preview", () => ({ renderPdfFirstPage: vi.fn(async () => new Blob(["jpeg"], { type: "image/jpeg" }) as unknown as Buffer) }));
+
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function fakeObjectUrls() {
@@ -69,19 +71,19 @@ it("replaces the single file for one-file tools", () => {
   expect(screen.queryByText("x.pdf")).not.toBeInTheDocument();
 });
 
-it("does not preview pdf inputs", () => {
+it("previews the first page of pdf inputs", async () => {
   fakeObjectUrls();
   render(<JobUploader operation="merge_pdf" />);
   choose([new File(["%PDF-1.7"], "doc.pdf", { type: "application/pdf" })]);
-  expect(screen.queryByAltText("doc.pdf preview")).not.toBeInTheDocument();
+  expect(await screen.findByAltText("doc.pdf preview")).toBeInTheDocument();
 });
 
-it("revokes removed rows' preview urls", () => {
+it("releases every preview url when the uploader unmounts", async () => {
   const urls = fakeObjectUrls();
-  render(<JobUploader operation="image_to_pdf" />);
+  const view = render(<JobUploader operation="image_to_pdf" />);
   choose([png("a.png"), png("b.png")]);
-  fireEvent.click(screen.getByRole("button", { name: "Remove a.png" }));
-  expect(screen.getByAltText("b.png preview")).toBeInTheDocument();
-  expect(screen.queryByAltText("a.png preview")).not.toBeInTheDocument();
+  expect(urls.revoked).toEqual([]);
+  view.unmount();
+  await Promise.resolve();
   expect(urls.revoked).toEqual(["blob:preview-1", "blob:preview-2"]);
 });
