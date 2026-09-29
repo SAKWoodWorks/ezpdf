@@ -157,3 +157,21 @@ input:not([type="file"]),select { min-height:46px; padding:10px 12px; width:100%
   font-size: 26px;
   cursor: pointer;
 }
+
+.selected-files li {
+  cursor: grab;
+}
+.selected-files li:active {
+  cursor: grabbing;
+}
+.selected-files li.dragging {
+  opacity: 0.45;
+}
+.selected-files li.drag-over {
+  outline: 2px dashed var(--blue);
+  outline-offset: 3px;
+}
+.selected-files li img {
+  -webkit-user-drag: none;
+  user-select: none;
+}

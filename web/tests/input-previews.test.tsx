@@ -111,3 +111,16 @@ it("closes the popup with the Escape key", () => {
   fireEvent.keyDown(document, { key: "Escape" });
   expect(screen.queryByAltText("a.png full page")).not.toBeInTheDocument();
 });
+
+it("reorders files by dragging a card onto another", () => {
+  fakeObjectUrls();
+  render(<JobUploader operation="image_to_pdf" />);
+  choose([png("a.png"), png("b.png")]);
+  const cards = screen.getAllByAltText(/preview$/);
+  fireEvent.dragStart(cards[0], { dataTransfer: { setData: vi.fn(), effectAllowed: "" } });
+  fireEvent.dragOver(cards[1], { preventDefault: vi.fn(), dataTransfer: { dropEffect: "" } });
+  fireEvent.drop(cards[1], { preventDefault: vi.fn(), dataTransfer: { getData: () => "0" } });
+  const order = screen.getAllByAltText(/preview$/).map(img => img.getAttribute("alt"));
+  expect(order).toEqual(["b.png preview", "a.png preview"]);
+  expect(screen.getByText("2 files selected")).toBeInTheDocument();
+});
