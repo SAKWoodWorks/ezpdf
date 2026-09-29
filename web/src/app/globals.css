@@ -124,7 +124,7 @@ input:not([type="file"]),select { min-height:46px; padding:10px 12px; width:100%
   flex: 0 0 auto;
 }
 .file-thumb {
-  width: 200px;
-  height: 100px;
+  width: 100px;
+  height: 200px;
   max-width: 100%;
 }
