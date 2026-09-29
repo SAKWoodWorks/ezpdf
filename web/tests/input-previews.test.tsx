@@ -25,13 +25,13 @@ function choose(files: File[]) {
   fireEvent.change(screen.getByLabelText("Choose files"), { target: { files } });
 }
 
-it("sizes input previews at 100x200 vertical", () => {
+it("sizes input previews at 1000x500", () => {
   fakeObjectUrls();
   render(<JobUploader operation="image_to_pdf" />);
   choose([png("a.png")]);
   const image = screen.getByAltText("a.png preview");
-  expect(image).toHaveAttribute("width", "100");
-  expect(image).toHaveAttribute("height", "200");
+  expect(image).toHaveAttribute("width", "1000");
+  expect(image).toHaveAttribute("height", "500");
 });
 
 it("appends a later selection instead of replacing it", () => {
