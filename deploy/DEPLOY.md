@@ -80,7 +80,31 @@ docker compose ps
 docker compose logs --tail 50 web worker caddy
 ```
 
-## 8. Administer PocketBase without exposing it
+## 8. Google Workspace sign-in (optional)
+
+To allow only your `@sakww.com` workspace accounts:
+
+1. In Google Cloud Console (select the sakww.com organization): create a project,
+   then **APIs & Services → OAuth consent screen** — choose **Internal** so only
+   workspace accounts can proceed.
+2. **Credentials → Create credentials → OAuth client ID → Web application** with
+   authorized redirect URI `https://ezpdf.sakww.com/api/auth/google/callback`.
+3. Copy the client ID and secret into `.env`:
+
+```
+GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_ALLOWED_DOMAIN=sakww.com
+GOOGLE_ONLY=true
+```
+
+4. `docker compose up -d` — the login page becomes a single **Sign in with Google**
+   button; accounts are created automatically on first sign-in and password
+   registration is disabled.
+
+Without these variables the site keeps email/password registration.
+
+## 9. Administer PocketBase without exposing it
 
 PocketBase is loopback-only on the droplet. Reach the admin dashboard through
 an SSH tunnel from your own machine:
@@ -91,7 +115,7 @@ ssh -L 8009:127.0.0.1:8009 root@YOUR_DROPLET_IP   # use your POCKETBASE_PORT
 
 Then open `http://localhost:8009/_/` locally.
 
-## 9. Updates
+## 10. Updates
 
 ```bash
 cd ezpdf
@@ -99,7 +123,7 @@ git pull
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
 
-## 10. Backups
+## 11. Backups
 
 Two things hold state:
 

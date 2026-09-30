@@ -13,6 +13,10 @@ services:
       JOBS_DIR: /jobs
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-209715200}
       JOB_TTL_SECONDS: ${JOB_TTL_SECONDS:-3600}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-}
+      GOOGLE_ONLY: ${GOOGLE_ONLY:-false}
     volumes: [./runtime/jobs:/jobs]
     ports: ["127.0.0.1:${WEB_PORT:-8007}:3000"]
     networks: [default, backend]

@@ -12,6 +12,7 @@ export async function authenticate(request: Request, register = false): Promise<
     const password = body?.password;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 || typeof password !== "string" || !password || password.length > 256) throw new ApiError("INVALID_INPUT");
     if (register) {
+      if (process.env.GOOGLE_ONLY === "true") throw new ApiError("AUTH_GOOGLE_ONLY", 403);
       if (password.length < 8 || body?.passwordConfirm !== password) throw new ApiError("INVALID_INPUT");
       await adminRequest("collections/users/records", { method: "POST", body: JSON.stringify({ email, password, passwordConfirm: password }) });
     }

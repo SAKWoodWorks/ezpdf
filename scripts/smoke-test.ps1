@@ -1,5 +1,5 @@
 param(
-    [string]$BaseUrl = "http://localhost:3000",
+    [string]$BaseUrl = "http://127.0.0.1:8007",
     [int]$TimeoutSeconds = 120
 )
 
@@ -40,7 +40,18 @@ try {
 
     $email = "smoke-$([guid]::NewGuid().ToString('N'))@example.test"
     $password = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
-    $null = Invoke-Json POST "api/auth/register" @{ email = $email; password = $password; passwordConfirm = $password }
+    try {
+        $null = Invoke-Json POST "api/auth/register" @{ email = $email; password = $password; passwordConfirm = $password }
+    } catch {
+        if ($_.Exception.Message -notmatch "403") { throw }
+        # GOOGLE_ONLY mode: password registration is disabled; sign in with a
+        # pre-created workspace test account from the environment instead.
+        if (-not $env:SMOKE_TEST_EMAIL -or -not $env:SMOKE_TEST_PASSWORD) {
+            throw "GOOGLE_ONLY is enabled: set SMOKE_TEST_EMAIL and SMOKE_TEST_PASSWORD to run the smoke test"
+        }
+        $email = $env:SMOKE_TEST_EMAIL
+        $password = $env:SMOKE_TEST_PASSWORD
+    }
     $null = Invoke-Json POST "api/auth/logout" @{}
     $null = Invoke-Json POST "api/auth/login" @{ email = $email; password = $password }
 

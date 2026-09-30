@@ -47,6 +47,13 @@ following its [Docker guidance](https://pocketbase.io/docs/going-to-production/#
 The previous third-party image tag was unavailable. The Dockerfile supports
 amd64 and arm64 release binaries.
 
+## Google Workspace sign-in (optional)
+
+Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_ALLOWED_DOMAIN=sakww.com`,
+and `GOOGLE_ONLY=true` to replace password login with a workspace-only
+**Sign in with Google** button. Redirect URI for the Google OAuth client:
+`https://YOUR_DOMAIN/api/auth/google/callback`. See `deploy/DEPLOY.md`.
+
 ## Configuration
 
 | Variable | Compose behavior |
